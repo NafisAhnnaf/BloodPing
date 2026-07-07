@@ -1,0 +1,12 @@
+[project]
+name = "bloodping-backend"
+version = "0.1.0"
+description = "Backend API for BloodPing"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi[standard]>=0.110.0",
+    "uvicorn>=0.29.0",
+    "pydantic-settings>=2.2.1",
+    "psycopg2-binary>=2.9.9",
+]
