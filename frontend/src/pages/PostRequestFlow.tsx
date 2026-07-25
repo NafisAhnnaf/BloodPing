@@ -3,6 +3,7 @@ import { History as HistoryIcon, Clock, MapPin, CheckCircle, Search, ChevronLeft
 import { Header } from '../components/layout/Header';
 import { RequestCard } from '../components/ui/RequestCard';
 import { SelectDropdown } from '../components/ui/SelectDropdown';
+import { CreateRequestModal } from '../components/ui/CreateRequestModal';
 import { useAppData } from '../context/AppDataContext';
 import { useRole } from '../context/RoleContext';
 
@@ -12,6 +13,8 @@ export function PostRequestFlow() {
   
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'latest' | 'oldest'>('latest');
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
@@ -65,6 +68,18 @@ export function PostRequestFlow() {
                </div>
             </div>
           </section>
+
+          {/* Recipient Create Request Button */}
+          {role === 'recipient' && (
+            <div className="mb-2">
+              <button 
+                onClick={() => setShowCreateModal(true)}
+                className="w-full flex items-center justify-center gap-2 py-4 bg-slate-900 text-white rounded-2xl font-black text-lg shadow-xl hover:bg-slate-800 active:scale-[0.98] transition-all border border-slate-700"
+              >
+                + Create Blood Request
+              </button>
+            </div>
+          )}
 
           {/* Search Row */}
           <section className="flex gap-2">
@@ -128,6 +143,8 @@ export function PostRequestFlow() {
             </div>
           )}
       </main>
+
+      {showCreateModal && <CreateRequestModal onClose={() => setShowCreateModal(false)} />}
     </div>
   );
 }

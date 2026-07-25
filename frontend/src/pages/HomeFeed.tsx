@@ -7,6 +7,7 @@ import { RangeSlider } from '../components/ui/RangeSlider';
 import { SegmentedControl } from '../components/ui/SegmentedControl';
 import { SelectDropdown } from '../components/ui/SelectDropdown';
 import { RequestCard } from '../components/ui/RequestCard';
+import { CreateRequestModal } from '../components/ui/CreateRequestModal';
 import { BLOOD_GROUPS } from '../services/mockData';
 import { useRole } from '../context/RoleContext';
 import { useAppData } from '../context/AppDataContext';
@@ -23,6 +24,7 @@ export function HomeFeed() {
   const [maxDistance, setMaxDistance] = useState<number>(20); // max 20km
   const [urgencyFilter, setUrgencyFilter] = useState<'all' | 'urgent' | 'open'>('all');
   const [sortBy, setSortBy] = useState<'latest' | 'oldest' | 'abc'>('latest');
+  const [showCreateModal, setShowCreateModal] = useState(false);
   
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -210,6 +212,18 @@ export function HomeFeed() {
                </div>
              )}
 
+             {/* Recipient Create Request Button */}
+             {role === 'recipient' && (
+               <div className="mt-6 mb-2">
+                 <button 
+                   onClick={() => setShowCreateModal(true)}
+                   className="w-full flex items-center justify-center gap-2 py-4 bg-slate-900 text-white rounded-2xl font-black text-lg shadow-xl hover:bg-slate-800 active:scale-[0.98] transition-all border border-slate-700"
+                 >
+                   + Create Blood Request
+                 </button>
+               </div>
+             )}
+
              {/* Blood Group Pills */}
              <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide snap-x">
                {BLOOD_GROUPS.map(bg => (
@@ -265,6 +279,8 @@ export function HomeFeed() {
             </div>
           )}
       </main>
+
+      {showCreateModal && <CreateRequestModal onClose={() => setShowCreateModal(false)} />}
     </div>
   );
 }

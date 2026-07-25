@@ -1,15 +1,24 @@
-import React from 'react';
-import { Heart, MapPin, Clock, Activity, Users } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Heart, MapPin, Clock, Activity, Users, Settings } from 'lucide-react';
 import { BloodRequest, useAppData } from '../../context/AppDataContext';
 import { useRole } from '../../context/RoleContext';
+import { RequestDetailsModal } from './RequestDetailsModal';
+import { ManageRequestModal } from './ManageRequestModal';
 
 interface RequestCardProps {
   request: BloodRequest;
 }
 
 export function RequestCard({ request }: RequestCardProps) {
-  const { donateToRequest, updateRequestStatus } = useAppData();
+  const { currentUser } = useAppData();
   const { role } = useRole();
+  const [showDetails, setShowDetails] = useState(false);
+  const [showManage, setShowManage] = useState(false);
+
+  useEffect(() => {
+    setShowDetails(false);
+    setShowManage(false);
+  }, [role]);
 
   const progressPercentage = Math.min(100, (request.unitsFulfilled / request.unitsRequired) * 100);
 
@@ -18,15 +27,8 @@ export function RequestCard({ request }: RequestCardProps) {
   const timeAgoText = daysAgo === 0 ? 'Today' : `${daysAgo}d ago`;
   const deadlineDate = new Date(request.deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 
-  const handleDonate = () => {
-    if (request.status === 'open') {
-      donateToRequest(request.id);
-    }
-  };
-
-  const handleComplete = () => {
-    updateRequestStatus(request.id, 'completed');
-  };
+  const hasApplied = request.applications.some(app => app.donorId === currentUser.id);
+  const userApp = request.applications.find(app => app.donorId === currentUser.id);
 
   return (
     <div className="bg-white/40 backdrop-blur-xl border border-white/50 rounded-3xl p-5 flex flex-col gap-4 shadow-lg hover:shadow-2xl hover:-translate-y-1 hover:bg-white/50 transition-all duration-300">
@@ -104,45 +106,44 @@ export function RequestCard({ request }: RequestCardProps) {
       <div className="flex items-center justify-between pt-1">
         <div className="flex items-center gap-1.5 text-xs font-extrabold text-slate-500">
           <Users size={16} className="text-slate-400" />
-          <span>{request.applicants} Donors Applied</span>
+          <span>{request.applications.length} Donors Applied</span>
         </div>
         
         {role === 'donor' ? (
           <button 
-            onClick={handleDonate}
-            disabled={request.status !== 'open'}
+            onClick={() => setShowDetails(true)}
+            disabled={request.status === 'completed'}
             className={`flex items-center gap-2 px-6 py-2.5 rounded-2xl text-sm font-extrabold transition-all shadow-md active:scale-95 ${
-              request.status === 'open' 
-                ? 'bg-gradient-to-r from-red-600 to-red-500 text-white hover:shadow-lg hover:from-red-500 hover:to-red-400' 
-                : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+              request.status === 'completed'
+                ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+                : hasApplied
+                  ? 'bg-amber-100 text-amber-700 hover:bg-amber-200 shadow-none'
+                  : 'bg-gradient-to-r from-red-600 to-red-500 text-white hover:shadow-lg hover:from-red-500 hover:to-red-400'
             }`}
           >
-            {request.status === 'open' ? (
+            {request.status === 'completed' ? (
+              'Completed'
+            ) : hasApplied ? (
+              <span className="capitalize">{userApp?.status || 'Applied'}</span>
+            ) : (
               <>
                 <Heart size={16} className="fill-white" />
-                Donate Now
+                View & Apply
               </>
-            ) : request.status === 'pending' ? (
-              'Pending...'
-            ) : (
-              'Completed'
             )}
           </button>
         ) : (
           <button 
-            onClick={handleComplete}
-            disabled={request.status === 'completed'}
-            className={`flex items-center gap-2 px-6 py-2.5 rounded-2xl text-sm font-extrabold transition-all shadow-md active:scale-95 ${
-              request.status !== 'completed'
-                ? 'bg-emerald-600 text-white hover:bg-emerald-500'
-                : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
-            }`}
+            onClick={() => setShowManage(true)}
+            className="flex items-center gap-2 px-6 py-2.5 rounded-2xl text-sm font-extrabold transition-all shadow-md active:scale-95 bg-slate-800 text-white hover:bg-slate-900"
           >
-            {request.status !== 'completed' ? 'Mark Completed' : 'Completed'}
+            <Settings size={16} /> Manage
           </button>
         )}
       </div>
 
+      {showDetails && <RequestDetailsModal request={request} onClose={() => setShowDetails(false)} />}
+      {showManage && <ManageRequestModal request={request} onClose={() => setShowManage(false)} />}
     </div>
   );
 }

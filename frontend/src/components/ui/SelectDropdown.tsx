@@ -40,7 +40,7 @@ export function SelectDropdown({ value, onChange, options }: SelectDropdownProps
       </button>
 
       {isOpen && (
-        <div className="absolute z-50 w-full mt-2 bg-white/90 backdrop-blur-xl border border-white/60 rounded-xl shadow-xl overflow-hidden py-1 animate-in fade-in slide-in-from-top-2">
+        <div className="absolute z-[100] w-full mt-2 bg-white/90 backdrop-blur-xl border border-white/60 rounded-xl shadow-xl overflow-hidden py-1 animate-in fade-in slide-in-from-top-2">
           {options.map((opt) => (
             <button
               key={opt.value}
