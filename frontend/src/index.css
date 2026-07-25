@@ -1,3 +1,15 @@
+@import "tailwindcss";
+@config "../tailwind.config.js";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Add our global app background fallback */
+body {
+  @apply min-h-screen bg-gradient-to-br from-yellow-100 to-red-200 text-slate-900;
+}
+
 :root {
   --text: #6b6375;
   --text-h: #08060d;
