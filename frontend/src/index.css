@@ -5,6 +5,14 @@
 @tailwind components;
 @tailwind utilities;
 
+html, body, #root {
+  width: 100%;
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+}
+
 /* Add our global app background fallback */
 body {
   @apply min-h-screen bg-gradient-to-br from-yellow-100 to-red-200 text-slate-900;
@@ -62,21 +70,6 @@ body {
   }
 }
 
-body {
-  margin: 0;
-}
-
-#root {
-  width: 1126px;
-  max-width: 100%;
-  margin: 0 auto;
-  text-align: center;
-  border-inline: 1px solid var(--border);
-  min-height: 100svh;
-  display: flex;
-  flex-direction: column;
-  box-sizing: border-box;
-}
 
 h1,
 h2 {
