@@ -145,6 +145,7 @@ CREATE TABLE public.donation_requests (
     hospital_location   public.GEOGRAPHY(POINT, 4326) NOT NULL,
     hospital_address    TEXT NOT NULL,
     search_radius_km    NUMERIC(5, 2) NOT NULL DEFAULT 10,
+    is_urgent           BOOLEAN NOT NULL DEFAULT FALSE,
     notes               TEXT,
     required_by         TIMESTAMPTZ NOT NULL,           -- Ticket active time constraint
     status              public.donation_request_status NOT NULL DEFAULT 'open',
