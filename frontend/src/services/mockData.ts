@@ -66,9 +66,9 @@ export const initialRequests = [
 ];
 
 export const initialDonors = [
-  { id: 1, name: 'Sarah Jenkins', units: 24, bloodType: 'O-', age: 26, occupation: 'Software Engineer', lastDonated: '2025-11-12', medicalDocUrl: 'mock-doc.pdf' },
-  { id: 2, name: 'Michael Chen', units: 18, bloodType: 'A+', age: 31, occupation: 'Teacher', lastDonated: '2026-03-05', medicalDocUrl: 'mock-doc.pdf' },
-  { id: 3, name: 'David Rodriguez', units: 15, bloodType: 'B+', age: 22, occupation: 'Student', lastDonated: '2026-01-20', medicalDocUrl: 'mock-doc.pdf' },
-  { id: 4, name: 'Emily White', units: 12, bloodType: 'AB-', age: 28, occupation: 'Designer', lastDonated: '2025-09-15', medicalDocUrl: 'mock-doc.pdf' },
-  { id: 5, name: 'James Wilson', units: 10, bloodType: 'O+', age: 45, occupation: 'Accountant', lastDonated: '2026-04-10', medicalDocUrl: 'mock-doc.pdf' }
+  { id: 1, name: 'Sarah Jenkins', units: 24, bloodType: 'O-', age: 26, occupation: 'Software Engineer', lastDonated: '2025-11-12', medicalDocUrl: 'mock-doc.pdf', phone: '+1 (555) 111-2222' },
+  { id: 2, name: 'Michael Chen', units: 18, bloodType: 'A+', age: 31, occupation: 'Teacher', lastDonated: '2026-03-05', medicalDocUrl: 'mock-doc.pdf', phone: '+1 (555) 222-3333' },
+  { id: 3, name: 'David Rodriguez', units: 15, bloodType: 'B+', age: 22, occupation: 'Student', lastDonated: '2026-01-20', medicalDocUrl: 'mock-doc.pdf', phone: '+1 (555) 333-4444' },
+  { id: 4, name: 'Emily White', units: 12, bloodType: 'AB-', age: 28, occupation: 'Designer', lastDonated: '2025-09-15', medicalDocUrl: 'mock-doc.pdf', phone: '+1 (555) 444-5555' },
+  { id: 5, name: 'James Wilson', units: 10, bloodType: 'O+', age: 45, occupation: 'Accountant', lastDonated: '2026-04-10', medicalDocUrl: 'mock-doc.pdf', phone: '+1 (555) 555-6666' }
 ];

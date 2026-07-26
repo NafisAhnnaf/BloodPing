@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { X, Phone, Mail, MapPin, Activity, Clock } from 'lucide-react';
 import { BloodRequest, useAppData } from '../../context/AppDataContext';
 import { ConfirmActionModal } from './ConfirmActionModal';
+import { CancelApplicationModal } from './CancelApplicationModal';
 
 interface RequestDetailsModalProps {
   request: BloodRequest;
@@ -10,8 +11,9 @@ interface RequestDetailsModalProps {
 }
 
 export function RequestDetailsModal({ request, onClose }: RequestDetailsModalProps) {
-  const { applyToRequest, currentUser } = useAppData();
+  const { applyToRequest, currentUser, cancelApplication } = useAppData();
   const [showConfirm, setShowConfirm] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
 
   const handleApply = () => {
     applyToRequest(request.id);
@@ -19,7 +21,15 @@ export function RequestDetailsModal({ request, onClose }: RequestDetailsModalPro
     onClose();
   };
 
-  const hasApplied = request.applications.some(app => app.donorId === currentUser.id);
+  const handleCancelApplication = (reason: string) => {
+    cancelApplication(request.id, reason);
+    setShowCancelModal(false);
+    onClose();
+  };
+
+  const myApp = request.applications.find(app => app.donorId === currentUser.id);
+  const hasApplied = !!myApp;
+  const isCancellable = myApp && (myApp.status === 'pending' || myApp.status === 'accepted');
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -107,12 +117,22 @@ export function RequestDetailsModal({ request, onClose }: RequestDetailsModalPro
 
         {/* Actions */}
         <div className="flex gap-3 mt-6 pt-4 border-t border-slate-100">
-          <button 
-            onClick={onClose}
-            className="flex-1 py-3 px-4 rounded-xl font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors"
-          >
-            Cancel
-          </button>
+          {isCancellable ? (
+            <button 
+              onClick={() => setShowCancelModal(true)}
+              className="flex-1 py-3 px-4 rounded-xl font-extrabold shadow-md transition-all bg-red-100 text-red-700 hover:bg-red-200 border border-red-200 active:scale-95"
+            >
+              Cancel Application
+            </button>
+          ) : (
+            <button 
+              onClick={onClose}
+              className="flex-1 py-3 px-4 rounded-xl font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors"
+            >
+              Cancel
+            </button>
+          )}
+
           <button 
             onClick={() => setShowConfirm(true)}
             disabled={hasApplied || request.status === 'completed'}
@@ -122,7 +142,9 @@ export function RequestDetailsModal({ request, onClose }: RequestDetailsModalPro
                 : 'bg-gradient-to-r from-red-600 to-red-500 text-white hover:from-red-500 hover:to-red-400 active:scale-95'
             }`}
           >
-            {hasApplied ? 'Already Applied' : request.status === 'completed' ? 'Completed' : 'Apply to Donate'}
+            {hasApplied 
+              ? (myApp?.status === 'canceled' ? 'Canceled' : 'Already Applied') 
+              : request.status === 'completed' ? 'Completed' : 'Apply to Donate'}
           </button>
         </div>
 
@@ -134,6 +156,14 @@ export function RequestDetailsModal({ request, onClose }: RequestDetailsModalPro
           message="Are you sure you want to apply to donate for this request? The recipient will receive your details."
           onConfirm={handleApply}
           onCancel={() => setShowConfirm(false)}
+        />
+      )}
+
+      {showCancelModal && myApp && (
+        <CancelApplicationModal
+          status={myApp.status}
+          onConfirm={handleCancelApplication}
+          onClose={() => setShowCancelModal(false)}
         />
       )}
     </div>,

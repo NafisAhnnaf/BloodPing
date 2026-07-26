@@ -96,7 +96,7 @@ export function Leaderboard() {
                       {donor.units}
                       <ChevronUp size={16} />
                     </span>
-                    <span className="text-[10px] uppercase font-bold text-slate-400">Units Donated</span>
+                    <span className="text-[10px] uppercase font-bold text-slate-400">Points</span>
                   </div>
                 </div>
               );

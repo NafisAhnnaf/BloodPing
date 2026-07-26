@@ -9,7 +9,7 @@ import { useRole } from '../context/RoleContext';
 
 export function PostRequestFlow() {
   const { role } = useRole();
-  const { requests } = useAppData();
+  const { requests, user } = useAppData();
   
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'latest' | 'oldest'>('latest');
@@ -20,6 +20,14 @@ export function PostRequestFlow() {
 
   const processedRequests = useMemo(() => {
     let result = [...requests];
+
+    // Filter by role & user involvement
+    if (role === 'donor') {
+      result = result.filter(req => req.applications.some(app => app.donorId === user?.id));
+    } else {
+      // Recipient
+      result = result.filter(req => req.authorName === user?.name);
+    }
 
     // Search filter
     if (searchQuery.trim()) {

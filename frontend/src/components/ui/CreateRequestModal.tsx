@@ -4,6 +4,7 @@ import { X, Calendar as CalendarIcon } from 'lucide-react';
 import { BloodRequest, useAppData } from '../../context/AppDataContext';
 import { BLOOD_GROUPS } from '../../services/mockData';
 import { SelectDropdown } from './SelectDropdown';
+import { DatePicker } from './DatePicker';
 
 interface CreateRequestModalProps {
   onClose: () => void;
@@ -25,8 +26,6 @@ export function CreateRequestModal({ onClose }: CreateRequestModalProps) {
   
   const [unitsInput, setUnitsInput] = useState<string>('1');
   const [deadline, setDeadline] = useState<string>('');
-
-  const formattedDate = deadline ? new Date(deadline).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : 'Select Date';
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -95,20 +94,10 @@ export function CreateRequestModal({ onClose }: CreateRequestModalProps) {
 
           <div>
             <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Required By Date</label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                <CalendarIcon size={18} className="text-slate-400" />
-              </div>
-              <input 
-                type="date" value={deadline} 
-                onChange={e => setDeadline(e.target.value)}
-                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                required
-              />
-              <div className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-11 pr-4 text-sm font-bold text-slate-700 pointer-events-none">
-                {formattedDate}
-              </div>
-            </div>
+            <DatePicker 
+              value={deadline}
+              onChange={setDeadline}
+            />
           </div>
 
           <div>

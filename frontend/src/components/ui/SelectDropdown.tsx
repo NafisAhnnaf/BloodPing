@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronDown } from 'lucide-react';
 
 interface Option {
@@ -18,15 +19,33 @@ export function SelectDropdown({ value, onChange, options }: SelectDropdownProps
 
   const selectedOption = options.find(opt => opt.value === value) || options[0];
 
+  const [dropdownStyles, setDropdownStyles] = useState<React.CSSProperties>({});
+  const menuRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      if (
+        dropdownRef.current && !dropdownRef.current.contains(event.target as Node) &&
+        (!menuRef.current || !menuRef.current.contains(event.target as Node))
+      ) {
         setIsOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  useLayoutEffect(() => {
+    if (isOpen && dropdownRef.current) {
+      const rect = dropdownRef.current.getBoundingClientRect();
+      setDropdownStyles({
+        position: 'absolute',
+        top: `${rect.bottom + window.scrollY}px`,
+        left: `${rect.left + window.scrollX}px`,
+        width: `${rect.width}px`
+      });
+    }
+  }, [isOpen]);
 
   return (
     <div className="relative w-full" ref={dropdownRef}>
@@ -39,8 +58,12 @@ export function SelectDropdown({ value, onChange, options }: SelectDropdownProps
         <ChevronDown size={16} className={`text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
-      {isOpen && (
-        <div className="absolute z-[100] w-full mt-2 bg-white/90 backdrop-blur-xl border border-white/60 rounded-xl shadow-xl overflow-hidden py-1 animate-in fade-in slide-in-from-top-2">
+      {isOpen && createPortal(
+        <div 
+          ref={menuRef}
+          style={dropdownStyles}
+          className="z-[99999] mt-2 bg-white/90 backdrop-blur-xl border border-white/60 rounded-xl shadow-xl overflow-hidden py-1 animate-in fade-in slide-in-from-top-2"
+        >
           {options.map((opt) => (
             <button
               key={opt.value}
@@ -58,7 +81,8 @@ export function SelectDropdown({ value, onChange, options }: SelectDropdownProps
               {opt.label}
             </button>
           ))}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

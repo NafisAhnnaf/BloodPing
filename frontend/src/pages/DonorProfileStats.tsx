@@ -53,7 +53,7 @@ export function DonorProfileStats() {
 
         {/* Stats Section */}
         <section className="grid grid-cols-2 gap-4">
-          <div className="bg-white/40 backdrop-blur-xl border border-white/50 rounded-3xl p-5 flex flex-col gap-2 shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
+          <div className="bg-white/90 backdrop-blur-xl border border-slate-200/80 shadow-sm rounded-2xl p-5 flex flex-col gap-2 hover:shadow-md hover:-translate-y-1 transition-all duration-300">
             <div className="flex items-center gap-2 text-slate-500">
               {role === 'donor' ? <Droplets size={20} className="text-red-500" /> : <Activity size={20} className="text-red-500" />}
               <span className="text-sm font-bold">{role === 'donor' ? 'Total Donations' : 'Total Requests'}</span>
@@ -61,7 +61,7 @@ export function DonorProfileStats() {
             <p className="text-3xl font-black text-slate-900">{role === 'donor' ? '12' : '4'}</p>
           </div>
 
-          <div className="bg-white/40 backdrop-blur-xl border border-white/50 rounded-3xl p-5 flex flex-col gap-2 shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
+          <div className="bg-white/90 backdrop-blur-xl border border-slate-200/80 shadow-sm rounded-2xl p-5 flex flex-col gap-2 hover:shadow-md hover:-translate-y-1 transition-all duration-300">
             <div className="flex items-center gap-2 text-slate-500">
               <Calendar size={20} className="text-orange-500" />
               <span className="text-sm font-bold">{role === 'donor' ? 'Last Donation' : 'Last Request'}</span>
@@ -73,7 +73,7 @@ export function DonorProfileStats() {
         {/* Settings List */}
         <section className="flex flex-col gap-3">
           {settingsOptions.map(option => (
-            <div key={option.id} className="bg-white/40 backdrop-blur-xl border border-white/50 rounded-2xl p-4 flex items-center justify-between shadow-lg hover:shadow-2xl hover:-translate-y-1 hover:bg-white/50 transition-all duration-300 cursor-pointer group">
+            <div key={option.id} className="bg-white/90 backdrop-blur-xl border border-slate-200/80 rounded-2xl p-4 flex items-center justify-between shadow-sm hover:shadow-md hover:-translate-y-1 hover:bg-white transition-all duration-300 cursor-pointer group">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-xl bg-slate-50 text-slate-600 flex items-center justify-center group-hover:bg-red-50 group-hover:text-red-600 transition-colors">
                   <option.icon size={24} />

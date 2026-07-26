@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Crosshair, Bell, ArrowLeft, Home, Trophy, History, User } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { useRole } from '../../context/RoleContext';
+import { useAppData } from '../../context/AppDataContext';
 
 interface HeaderProps {
   title?: string;
@@ -17,15 +18,36 @@ export function Header({
   showBack = false, 
   onBack, 
   showLogo = true,
-  showNotification = true,
-  notificationPulse = false
+  showNotification = true
 }: HeaderProps) {
   const location = useLocation();
   const currentPath = location.pathname;
   const { role, setRole } = useRole();
+  const { notifications, markNotificationsRead } = useAppData();
+  
+  const hasUnread = notifications.some(n => !n.read);
+  const [showInbox, setShowInbox] = useState(false);
+  const inboxRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (inboxRef.current && !inboxRef.current.contains(event.target as Node)) {
+        setShowInbox(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleToggleInbox = () => {
+    if (!showInbox) {
+      markNotificationsRead();
+    }
+    setShowInbox(!showInbox);
+  };
   
   const navLinks = [
-    { name: 'Home', path: '/' },
+    { name: 'Home', path: '/dashboard' },
     { name: 'Leaderboard', path: '/leaderboard' },
     { name: 'History', path: '/request' },
     { name: 'Profile', path: '/profile' }
@@ -44,7 +66,7 @@ export function Header({
       )}
 
       {showLogo && !showBack && (
-        <Link to="/" className="flex items-center gap-2 mr-auto md:mr-8 cursor-pointer hover:opacity-80 transition-opacity">
+        <Link to="/dashboard" className="flex items-center gap-2 mr-auto md:mr-8 cursor-pointer hover:opacity-80 transition-opacity">
           <div className="w-8 h-8 bg-red-600 rounded-xl flex items-center justify-center shadow-sm">
             <Crosshair size={16} className="text-white" />
           </div>
@@ -97,15 +119,42 @@ export function Header({
       </nav>
 
       {showNotification && (
-        <button className="w-10 h-10 flex items-center justify-center rounded-full bg-white/30 hover:bg-white/50 transition-colors shadow-sm relative ml-auto">
-          <Bell size={20} className="text-red-900" />
-          {notificationPulse && (
-            <>
-              <span className="absolute top-2 right-2.5 w-2 h-2 bg-red-600 rounded-full animate-ping"></span>
-              <span className="absolute top-2 right-2.5 w-2 h-2 bg-red-600 rounded-full"></span>
-            </>
+        <div className="relative ml-auto" ref={inboxRef}>
+          <button 
+            onClick={handleToggleInbox}
+            className="w-10 h-10 flex items-center justify-center rounded-full bg-white/30 hover:bg-white/50 transition-colors shadow-sm relative ml-auto"
+          >
+            <Bell size={20} className="text-red-900" />
+            {hasUnread && (
+              <>
+                <span className="absolute top-2 right-2.5 w-2 h-2 bg-red-600 rounded-full animate-ping"></span>
+                <span className="absolute top-2 right-2.5 w-2 h-2 bg-red-600 rounded-full"></span>
+              </>
+            )}
+          </button>
+
+          {showInbox && (
+            <div className="absolute right-0 mt-2 w-80 bg-white/90 backdrop-blur-xl border border-white/60 rounded-2xl shadow-xl overflow-hidden z-[9999] animate-in fade-in slide-in-from-top-2">
+              <div className="p-4 border-b border-slate-100 bg-slate-50/50">
+                <h3 className="font-black text-slate-800">Notifications</h3>
+              </div>
+              <div className="max-h-[60vh] overflow-y-auto p-2">
+                {notifications.length === 0 ? (
+                  <p className="text-sm font-medium text-slate-500 text-center py-6">No notifications yet.</p>
+                ) : (
+                  notifications.map(notif => (
+                    <div key={notif.id} className="p-3 hover:bg-slate-50 rounded-xl transition-colors border-b border-slate-50 last:border-0">
+                      <p className="text-sm font-bold text-slate-700 leading-snug">{notif.message}</p>
+                      <span className="text-xs font-medium text-slate-400 mt-1 block">
+                        {new Date(notif.timestamp).toLocaleString()}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
           )}
-        </button>
+        </div>
       )}
       
       {showBack && showNotification && <div className="w-10 md:hidden" />} 

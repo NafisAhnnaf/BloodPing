@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Check, CheckCircle, Edit2, Trash2, AlertTriangle, ChevronDown, ChevronUp, Download } from 'lucide-react';
+import { X, Check, CheckCircle, Edit2, Trash2, AlertTriangle, ChevronDown, ChevronUp, Download, Phone } from 'lucide-react';
 import { BloodRequest, useAppData, ApplicationStatus, Donor } from '../../context/AppDataContext';
 import { ConfirmActionModal } from './ConfirmActionModal';
+import { DatePicker } from './DatePicker';
 
 interface ManageRequestModalProps {
   request: BloodRequest;
@@ -33,6 +34,7 @@ export function ManageRequestModal({ request, onClose }: ManageRequestModalProps
     urgent: request.urgent,
     contact: { ...request.contact } as any,
     preferredDistance: request.preferredDistance || 5,
+    deadline: request.deadline ? request.deadline.split('T')[0] : '',
   });
 
   const handleSaveEdit = () => {
@@ -40,6 +42,7 @@ export function ManageRequestModal({ request, onClose }: ManageRequestModalProps
     updateRequest(request.id, {
       ...editForm,
       unitsRequired: isNaN(parsedUnits) || parsedUnits < 1 ? 1 : parsedUnits,
+      deadline: editForm.deadline ? new Date(editForm.deadline).toISOString() : request.deadline,
     });
     setIsEditing(false);
   };
@@ -67,6 +70,12 @@ export function ManageRequestModal({ request, onClose }: ManageRequestModalProps
         donorId, status,
         title: 'Mark as Done',
         message: 'Are you sure you want to mark this donation as fulfilled? This will update the unit count and award leaderboard points to the donor.'
+      });
+    } else if (status === 'canceled') {
+      setConfirmAction({
+        donorId, status,
+        title: 'Cancel Acceptance',
+        message: 'Cancel acceptance for this donor? No penalties will be applied.'
       });
     }
   };
@@ -171,16 +180,23 @@ export function ManageRequestModal({ request, onClose }: ManageRequestModalProps
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold focus:ring-2 focus:ring-red-500/30"
                     />
                   </div>
-                  <div className="flex items-center pt-5">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input 
-                        type="checkbox" checked={editForm.urgent}
-                        onChange={e => setEditForm(prev => ({ ...prev, urgent: e.target.checked }))}
-                        className="w-5 h-5 rounded text-red-600 focus:ring-red-500"
-                      />
-                      <span className="text-sm font-bold text-slate-700">Urgent Request</span>
-                    </label>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Required By Date</label>
+                    <DatePicker 
+                      value={editForm.deadline || ''}
+                      onChange={val => setEditForm(prev => ({ ...prev, deadline: val }))}
+                    />
                   </div>
+                </div>
+                <div className="flex items-center mt-1 mb-2">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input 
+                      type="checkbox" checked={editForm.urgent}
+                      onChange={e => setEditForm(prev => ({ ...prev, urgent: e.target.checked }))}
+                      className="w-5 h-5 rounded text-red-600 focus:ring-red-500"
+                    />
+                    <span className="text-sm font-bold text-slate-700">Urgent Request</span>
+                  </label>
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Full Address</label>
@@ -288,20 +304,33 @@ export function ManageRequestModal({ request, onClose }: ManageRequestModalProps
                 return (
                   <div key={idx} className="bg-white/60 rounded-2xl border border-slate-100 shadow-sm flex flex-col overflow-hidden transition-all duration-300 hover:bg-white/80">
                     <div 
-                      className="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 cursor-pointer"
+                      className="p-4 flex items-center justify-between gap-3 cursor-pointer"
                       onClick={() => setExpandedDonorId(isExpanded ? null : donor.id)}
                     >
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-slate-200 rounded-full flex items-center justify-center text-slate-600 font-bold">
+                      <div className="flex items-center gap-3 overflow-hidden">
+                        <div className="w-10 h-10 bg-slate-200 rounded-full flex-shrink-0 flex items-center justify-center text-slate-600 font-bold">
                           {donor.name.charAt(0)}
                         </div>
-                        <div>
-                          <h4 className="font-extrabold text-slate-800">{donor.name}</h4>
-                          <p className="text-[10px] font-black text-red-600 uppercase tracking-wider">{donor.bloodType} • {donor.units} pts</p>
+                        <div className="flex flex-col min-w-0">
+                          <h4 className="font-extrabold text-slate-800 truncate">{donor.name}</h4>
+                          <div className="flex items-center gap-2 mt-0.5 whitespace-nowrap">
+                            <span className="text-[10px] font-black text-red-600 bg-red-50 px-2 py-0.5 rounded-md border border-red-100 uppercase tracking-wider">
+                              {donor.bloodType}
+                            </span>
+                            {donor.phone && (
+                              <a 
+                                href={`tel:${donor.phone}`} 
+                                onClick={e => e.stopPropagation()} 
+                                className="text-[11px] font-bold text-slate-500 hover:text-red-600 flex items-center gap-1 transition-colors"
+                              >
+                                <Phone size={10} /> {donor.phone}
+                              </a>
+                            )}
+                          </div>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2 w-full sm:w-auto" onClick={e => e.stopPropagation()}>
+                      <div className="flex items-center gap-2 flex-shrink-0" onClick={e => e.stopPropagation()}>
                         {app.status === 'pending' && (
                           <>
                             <button 
@@ -320,12 +349,20 @@ export function ManageRequestModal({ request, onClose }: ManageRequestModalProps
                         )}
                         
                         {app.status === 'accepted' && (
-                          <button 
-                            onClick={() => handleActionClick(donor.id, 'completed')}
-                            className="w-full sm:w-auto px-4 py-2 rounded-xl text-xs font-extrabold text-white bg-emerald-500 hover:bg-emerald-600 shadow-md flex items-center justify-center gap-1.5 transition-colors"
-                          >
-                            <Check size={14} className="stroke-[3]" /> Mark Done
-                          </button>
+                          <>
+                            <button 
+                              onClick={() => handleActionClick(donor.id, 'canceled')}
+                              className="px-3 py-1.5 rounded-lg text-xs font-bold text-slate-600 border border-slate-200 hover:bg-slate-50 transition-colors"
+                            >
+                              Cancel
+                            </button>
+                            <button 
+                              onClick={() => handleActionClick(donor.id, 'completed')}
+                              className="px-3 py-1.5 rounded-lg text-xs font-extrabold text-white bg-emerald-500 hover:bg-emerald-600 shadow-sm flex items-center justify-center gap-1 transition-colors"
+                            >
+                              <Check size={14} className="stroke-[3]" /> Mark Done
+                            </button>
+                          </>
                         )}
 
                         {app.status === 'completed' && (
@@ -339,8 +376,20 @@ export function ManageRequestModal({ request, onClose }: ManageRequestModalProps
                             Rejected
                           </span>
                         )}
+                        
+                        {app.status === 'canceled' && (
+                          <span className="text-xs font-bold text-rose-600 bg-rose-50 border border-rose-200 px-3 py-1.5 rounded-lg">
+                            Canceled
+                          </span>
+                        )}
 
-                        <div className="ml-2 text-slate-400">
+                        <div 
+                          className="ml-2 text-slate-400 cursor-pointer p-1 hover:bg-slate-100 rounded-full transition-colors"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setExpandedDonorId(isExpanded ? null : donor.id);
+                          }}
+                        >
                           {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
                         </div>
                       </div>
@@ -367,6 +416,13 @@ export function ManageRequestModal({ request, onClose }: ManageRequestModalProps
                             {donor.lastDonated || 'Never'}
                           </div>
                         </div>
+
+                        {app.status === 'canceled' && app.cancelReason && (
+                          <div className="mb-4 p-3 bg-rose-50 rounded-xl border border-rose-100">
+                            <span className="block text-[10px] text-rose-500 uppercase tracking-wider mb-1 font-bold">Cancellation Reason</span>
+                            <p className="text-xs text-rose-700 font-medium">{app.cancelReason}</p>
+                          </div>
+                        )}
 
                         {donor.medicalDocUrl && (
                           <a 

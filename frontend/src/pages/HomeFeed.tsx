@@ -230,8 +230,8 @@ export function HomeFeed() {
                  <button 
                     key={bg}
                     onClick={() => setActiveGroup(bg)}
-                    className={`snap-start px-5 py-2.5 rounded-full text-sm font-bold whitespace-nowrap transition-all border shadow-sm
-                     ${activeGroup === bg ? 'bg-red-600 text-white border-red-600 shadow-md' : 'bg-white/60 backdrop-blur-md text-slate-700 border-white/60 hover:bg-white'}`}
+                     className={`snap-start px-5 py-2.5 rounded-full text-sm font-bold whitespace-nowrap transition-all border shadow-sm
+                      ${activeGroup === bg ? 'bg-red-600 text-white border-red-600 shadow-md' : 'bg-white/60 backdrop-blur-md text-slate-700 border-white/60 hover:bg-white'}`}
                  >
                    {bg}
                  </button>
