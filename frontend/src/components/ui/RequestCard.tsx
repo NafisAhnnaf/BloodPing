@@ -128,7 +128,7 @@ export function RequestCard({ request }: RequestCardProps) {
             ) : (
               <>
                 <Heart size={16} className="fill-white" />
-                View & Apply
+                View
               </>
             )}
           </button>

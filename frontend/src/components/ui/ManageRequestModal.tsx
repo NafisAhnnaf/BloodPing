@@ -321,7 +321,7 @@ export function ManageRequestModal({ request, onClose }: ManageRequestModalProps
                               <a 
                                 href={`tel:${donor.phone}`} 
                                 onClick={e => e.stopPropagation()} 
-                                className="text-[11px] font-bold text-slate-500 hover:text-red-600 flex items-center gap-1 transition-colors"
+                                className="hidden sm:flex text-[11px] font-bold text-slate-500 hover:text-red-600 items-center gap-1 transition-colors"
                               >
                                 <Phone size={10} /> {donor.phone}
                               </a>
@@ -398,6 +398,14 @@ export function ManageRequestModal({ request, onClose }: ManageRequestModalProps
                     {/* Expanded Content */}
                     {isExpanded && (
                       <div className="p-4 pt-0 border-t border-slate-100 bg-slate-50/50 mt-2">
+                        {donor.phone && (
+                          <div className="mt-4 mb-2">
+                            <span className="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Contact Number</span>
+                            <a href={`tel:${donor.phone}`} className="inline-flex items-center gap-1.5 text-sm font-bold text-slate-700 hover:text-red-600 transition-colors bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm" onClick={e => e.stopPropagation()}>
+                              <Phone size={14} className="text-slate-400" /> {donor.phone}
+                            </a>
+                          </div>
+                        )}
                         <div className="grid grid-cols-2 gap-4 text-sm font-bold text-slate-700 mb-4 mt-4">
                           <div>
                             <span className="block text-[10px] text-slate-400 uppercase tracking-wider mb-0.5">Age</span>

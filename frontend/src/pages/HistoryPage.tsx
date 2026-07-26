@@ -7,7 +7,7 @@ import { CreateRequestModal } from '../components/ui/CreateRequestModal';
 import { useAppData } from '../context/AppDataContext';
 import { useRole } from '../context/RoleContext';
 
-export function PostRequestFlow() {
+export function HistoryPage() {
   const { role } = useRole();
   const { requests, user } = useAppData();
   

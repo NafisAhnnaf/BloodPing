@@ -1,9 +1,10 @@
 import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { HomeFeed } from './pages/HomeFeed';
+import { FeedPage } from './pages/FeedPage';
+import { LandingPage } from './pages/LandingPage';
 import { Leaderboard } from './pages/Leaderboard';
 import { DonorProfileStats } from './pages/DonorProfileStats';
-import { PostRequestFlow } from './pages/PostRequestFlow';
+import { HistoryPage } from './pages/HistoryPage';
 import { VitalCore } from './pages/VitalCore';
 import { BottomNav } from './components/layout/BottomNav';
 import { RoleProvider } from './context/RoleContext';
@@ -14,7 +15,7 @@ function AppLayout() {
   const { isAuthenticated } = useAppData();
   const location = useLocation();
 
-  const isAuthPage = location.pathname === '/login' || location.pathname === '/signup';
+  const isAuthPage = location.pathname === '/login' || location.pathname === '/signup' || location.pathname === '/';
 
   const bgClass = isAuthPage
     ? "" // Let AuthPage handle its own full-screen background
@@ -23,14 +24,15 @@ function AppLayout() {
   return (
     <div className={bgClass}>
       <Routes>
-        <Route path="/login" element={!isAuthenticated ? <AuthPage /> : <Navigate to="/dashboard" replace />} />
-        <Route path="/signup" element={!isAuthenticated ? <AuthPage /> : <Navigate to="/dashboard" replace />} />
-        <Route path="/dashboard" element={isAuthenticated ? <HomeFeed /> : <Navigate to="/login" replace />} />
+        <Route path="/" element={!isAuthenticated ? <LandingPage /> : <Navigate to="/feed" replace />} />
+        <Route path="/login" element={!isAuthenticated ? <AuthPage /> : <Navigate to="/feed" replace />} />
+        <Route path="/signup" element={!isAuthenticated ? <AuthPage /> : <Navigate to="/feed" replace />} />
+        <Route path="/feed" element={isAuthenticated ? <FeedPage /> : <Navigate to="/login" replace />} />
         <Route path="/leaderboard" element={isAuthenticated ? <Leaderboard /> : <Navigate to="/login" replace />} />
         <Route path="/profile" element={isAuthenticated ? <DonorProfileStats /> : <Navigate to="/login" replace />} />
-        <Route path="/request" element={isAuthenticated ? <PostRequestFlow /> : <Navigate to="/login" replace />} />
+        <Route path="/history" element={isAuthenticated ? <HistoryPage /> : <Navigate to="/login" replace />} />
         <Route path="/vitals" element={isAuthenticated ? <VitalCore /> : <Navigate to="/login" replace />} />
-        <Route path="*" element={<Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />} />
+        <Route path="*" element={<Navigate to={isAuthenticated ? "/feed" : "/"} replace />} />
       </Routes>
       {isAuthenticated && <BottomNav />}
     </div>

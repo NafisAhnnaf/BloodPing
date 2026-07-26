@@ -13,7 +13,7 @@ import { useRole } from '../context/RoleContext';
 import { useAppData } from '../context/AppDataContext';
 import { Header } from '../components/layout/Header';
 
-export function HomeFeed() {
+export function FeedPage() {
   const [activeGroup, setActiveGroup] = useState('All');
   const { role } = useRole();
   const { requests } = useAppData();

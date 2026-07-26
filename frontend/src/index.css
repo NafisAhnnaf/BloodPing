@@ -13,6 +13,10 @@ html, body, #root {
   overflow-x: hidden;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
 /* Add our global app background fallback */
 body {
   @apply min-h-screen bg-gradient-to-br from-yellow-100 to-red-200 text-slate-900;

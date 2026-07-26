@@ -7,9 +7,9 @@ export function BottomNav() {
   const currentPath = location.pathname;
 
   const tabs = [
-    { id: 'home', label: 'Home', icon: Home, to: '/dashboard' },
+    { id: 'home', label: 'Feed', icon: Home, to: '/feed' },
     { id: 'leaderboard', label: 'Leaderboard', icon: Trophy, to: '/leaderboard' },
-    { id: 'history', label: 'History', icon: History, to: '/request' },
+    { id: 'history', label: 'History', icon: History, to: '/history' },
     { id: 'profile', label: 'Profile', icon: User, to: '/profile' }
   ];
 

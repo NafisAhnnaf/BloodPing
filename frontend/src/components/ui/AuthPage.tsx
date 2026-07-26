@@ -33,7 +33,7 @@ export function AuthPage() {
   const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     login(loginForm);
-    navigate('/dashboard');
+    navigate('/feed');
   };
 
   const handleSignupSubmit = (e: React.FormEvent) => {
@@ -61,17 +61,17 @@ export function AuthPage() {
     }
 
     signup(signupForm);
-    navigate('/dashboard');
+    navigate('/feed');
   };
 
   const handleGoogleLogin = () => {
     login({ email: 'google_user@demo.com', password: '' }, true);
-    navigate('/dashboard');
+    navigate('/feed');
   };
 
   const handleDemoLogin = () => {
     login({ email: 'donor@bloodping.com', password: 'password123' }, true);
-    navigate('/dashboard');
+    navigate('/feed');
   };
 
   return (
