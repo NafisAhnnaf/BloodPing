@@ -20,14 +20,14 @@
 ## 4. Key Entities and Database Schema Concepts
 *   **Users & Roles:** 
     *   Base user table extends Supabase's `auth.users`.
-    *   Users can toggle between roles. To support this, `donors` and `recipients` are separate tables that inherit/reference the base user table via foreign keys.
+    *   Users can act as Donors, Recipients, or Platform Administrators. To support this, `donors` and `recipients` are separate tables that inherit/reference the base user table via foreign keys. Admins have privileges to verify documents and manage user access.
 *   **Session Management:** 
     *   User sessions will store the user's IP address (using PostgreSQL's `inet` type) and MAC address (using the `macaddr` type) for geolocation and tracking purposes.
 *   **Medical Records:** 
     *   Physical documents are stored in Supabase Storage.
     *   Structured medical data is kept in the DB.
-    *   *Constraint:* Documents must be **4 months old or newer**. If older, the donor must update them before accepting new requests.
-    *   *Verification:* Done strictly by the recipient (peer-to-peer social media style), not by a central admin.
+    *   *Constraint:* Documents must be **4 months old or newer** at the time of upload.
+    *   *Verification:* Done by centralized platform administrators. Admins review uploaded documents and manage the `document_status` (`pending_review`, `approved`, `rejected`). Once approved, the donor achieves `is_platform_verified` status.
     *   *Future Scope:* OCR integration via AI APIs to auto-populate DB fields from uploaded medical documents.
 
 ## 5. Social & Core Features
