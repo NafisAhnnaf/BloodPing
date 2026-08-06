@@ -22,7 +22,7 @@ export function Header({
 }: HeaderProps) {
   const location = useLocation();
   const currentPath = location.pathname;
-  const { role, setRole } = useRole();
+  const { role, setRole, systemRole } = useRole();
   const { notifications, markNotificationsRead } = useAppData();
   
   const hasUnread = notifications.some(n => !n.read);
@@ -52,6 +52,10 @@ export function Header({
     { name: 'History', path: '/history' },
     { name: 'Profile', path: '/profile' }
   ];
+
+  if (systemRole === 'admin') {
+    navLinks.push({ name: 'Admin', path: '/admin' });
+  }
 
   return (
     <header className="sticky top-0 z-50 w-full bg-white/20 backdrop-blur-lg border-b border-white/30 min-h-16 flex flex-col md:flex-row items-center justify-between px-4 md:px-8 py-2 md:py-0 shadow-sm gap-3 md:gap-0">

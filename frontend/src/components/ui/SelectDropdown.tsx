@@ -10,14 +10,21 @@ interface Option {
 interface SelectDropdownProps {
   value: string;
   onChange: (val: string) => void;
-  options: Option[];
+  options: (Option | string)[];
 }
 
 export function SelectDropdown({ value, onChange, options }: SelectDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const selectedOption = options.find(opt => opt.value === value) || options[0];
+  const normalizedOptions: Option[] = options.map(opt => {
+    if (typeof opt === 'string') {
+      return { label: opt, value: opt };
+    }
+    return opt;
+  });
+
+  const selectedOption = normalizedOptions.find(opt => opt.value === value) || normalizedOptions[0];
 
   const [dropdownStyles, setDropdownStyles] = useState<React.CSSProperties>({});
   const menuRef = useRef<HTMLDivElement>(null);
@@ -60,11 +67,11 @@ export function SelectDropdown({ value, onChange, options }: SelectDropdownProps
 
       {isOpen && createPortal(
         <div 
-          ref={menuRef}
-          style={dropdownStyles}
-          className="z-[99999] mt-2 bg-white/90 backdrop-blur-xl border border-white/60 rounded-xl shadow-xl overflow-hidden py-1 animate-in fade-in slide-in-from-top-2"
+           ref={menuRef}
+           style={dropdownStyles}
+           className="z-[99999] mt-2 bg-white/90 backdrop-blur-xl border border-white/60 rounded-xl shadow-xl overflow-hidden py-1 animate-in fade-in slide-in-from-top-2"
         >
-          {options.map((opt) => (
+          {normalizedOptions.map((opt) => (
             <button
               key={opt.value}
               type="button"

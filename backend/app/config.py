@@ -3,6 +3,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     PROJECT_NAME: str = "BloodPing API"
     DATABASE_URL: str
+    SUPABASE_JWT_SECRET: str
+    SUPABASE_URL: str
+    SUPABASE_ANON_KEY: str
     
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding='utf-8')
 

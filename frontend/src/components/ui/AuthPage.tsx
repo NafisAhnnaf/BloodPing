@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAppData } from '../../context/AppDataContext';
 import { SelectDropdown } from './SelectDropdown';
-import { Mail, Lock, User, Phone, UploadCloud, MapPin, Search, Droplet } from 'lucide-react';
+import { Mail, Lock, User, Phone, UploadCloud, MapPin, Droplet } from 'lucide-react';
 import { BLOOD_GROUPS } from '../../services/mockData';
+import { supabase } from '../../services/supabaseClient';
 
 export function AuthPage() {
   const { login, signup } = useAppData();
@@ -20,6 +21,8 @@ export function AuthPage() {
 
   // Signup State
   const [signupForm, setSignupForm] = useState({
+    email: '',
+    password: '',
     fullName: '',
     username: '',
     phone: '',
@@ -30,13 +33,17 @@ export function AuthPage() {
     documentDate: ''
   });
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    login(loginForm);
-    navigate('/feed');
+    try {
+      await login(loginForm);
+      navigate('/feed');
+    } catch (err: any) {
+      alert(err.message || 'Failed to sign in.');
+    }
   };
 
-  const handleSignupSubmit = (e: React.FormEvent) => {
+  const handleSignupSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // Check age 18+ validation
@@ -60,18 +67,35 @@ export function AuthPage() {
       }
     }
 
-    signup(signupForm);
-    navigate('/feed');
+    try {
+      await signup(signupForm);
+      navigate('/feed');
+    } catch (err: any) {
+      alert(err.message || 'Failed to sign up.');
+    }
   };
 
-  const handleGoogleLogin = () => {
-    login({ email: 'google_user@demo.com', password: '' }, true);
-    navigate('/feed');
+  const handleGoogleLogin = async () => {
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/feed`
+        }
+      });
+      if (error) throw error;
+    } catch (err: any) {
+      alert(err.message || 'Google Sign-In failed.');
+    }
   };
 
-  const handleDemoLogin = () => {
-    login({ email: 'donor@bloodping.com', password: 'password123' }, true);
-    navigate('/feed');
+  const handleDemoLogin = async () => {
+    try {
+      await login({ email: 'donor@bloodping.com', password: 'password123' }, true);
+      navigate('/feed');
+    } catch (err: any) {
+      alert(err.message || 'Demo Login failed.');
+    }
   };
 
   return (
@@ -172,6 +196,38 @@ export function AuthPage() {
             <form className="space-y-4" onSubmit={handleSignupSubmit}>
               <h3 className="text-lg font-black text-slate-900 border-b pb-2 mb-4">Basic Profile</h3>
               
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Email</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Mail className="h-4 w-4 text-slate-400" />
+                  </div>
+                  <input
+                    type="email" required
+                    placeholder="donor@bloodping.com"
+                    value={signupForm.email}
+                    onChange={e => setSignupForm({...signupForm, email: e.target.value})}
+                    className="block w-full pl-10 pr-3 py-3 border-2 border-slate-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/15 bg-white/90 text-slate-900 rounded-xl font-semibold placeholder:text-slate-400 shadow-sm transition-all outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Password</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Lock className="h-4 w-4 text-slate-400" />
+                  </div>
+                  <input
+                    type="password" required
+                    placeholder="password123"
+                    value={signupForm.password}
+                    onChange={e => setSignupForm({...signupForm, password: e.target.value})}
+                    className="block w-full pl-10 pr-3 py-3 border-2 border-slate-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/15 bg-white/90 text-slate-900 rounded-xl font-semibold placeholder:text-slate-400 shadow-sm transition-all outline-none"
+                  />
+                </div>
+              </div>
+
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Full Name</label>
                 <div className="relative">

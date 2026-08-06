@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { FeedPage } from './pages/FeedPage';
 import { LandingPage } from './pages/LandingPage';
@@ -8,12 +8,25 @@ import { HistoryPage } from './pages/HistoryPage';
 import { VitalCore } from './pages/VitalCore';
 import { BottomNav } from './components/layout/BottomNav';
 import { RoleProvider } from './context/RoleContext';
-import { AppDataProvider, useAppData } from './context/AppDataContext';
+import { AppDataProvider } from './context/AppDataContext';
 import { AuthPage } from './components/ui/AuthPage';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { ProtectedRoute, GuestRoute } from './components/layout/RouteProtection';
+import { SetupProfilePage } from './pages/SetupProfilePage';
+import { AdminDashboard } from './pages/AdminDashboard';
 
 function AppLayout() {
-  const { isAuthenticated } = useAppData();
+  const { isAuthenticated, isLoading } = useAuth();
   const location = useLocation();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex flex-col justify-center items-center bg-gradient-to-br from-slate-950 to-rose-950 text-slate-100">
+        <div className="w-10 h-10 border-4 border-red-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+        <p className="text-xs font-bold tracking-wider text-rose-200 uppercase animate-pulse">Initializing BloodPing...</p>
+      </div>
+    );
+  }
 
   const isAuthPage = location.pathname === '/login' || location.pathname === '/signup' || location.pathname === '/';
 
@@ -24,14 +37,21 @@ function AppLayout() {
   return (
     <div className={bgClass}>
       <Routes>
-        <Route path="/" element={!isAuthenticated ? <LandingPage /> : <Navigate to="/feed" replace />} />
-        <Route path="/login" element={!isAuthenticated ? <AuthPage /> : <Navigate to="/feed" replace />} />
-        <Route path="/signup" element={!isAuthenticated ? <AuthPage /> : <Navigate to="/feed" replace />} />
-        <Route path="/feed" element={isAuthenticated ? <FeedPage /> : <Navigate to="/login" replace />} />
-        <Route path="/leaderboard" element={isAuthenticated ? <Leaderboard /> : <Navigate to="/login" replace />} />
-        <Route path="/profile" element={isAuthenticated ? <DonorProfileStats /> : <Navigate to="/login" replace />} />
-        <Route path="/history" element={isAuthenticated ? <HistoryPage /> : <Navigate to="/login" replace />} />
-        <Route path="/vitals" element={isAuthenticated ? <VitalCore /> : <Navigate to="/login" replace />} />
+        {/* Guest Routes */}
+        <Route path="/" element={<GuestRoute><LandingPage /></GuestRoute>} />
+        <Route path="/login" element={<GuestRoute><AuthPage /></GuestRoute>} />
+        <Route path="/signup" element={<GuestRoute><AuthPage /></GuestRoute>} />
+
+        {/* Protected Routes */}
+        <Route path="/setup-profile" element={<ProtectedRoute><SetupProfilePage /></ProtectedRoute>} />
+        <Route path="/feed" element={<ProtectedRoute><FeedPage /></ProtectedRoute>} />
+        <Route path="/leaderboard" element={<ProtectedRoute><Leaderboard /></ProtectedRoute>} />
+        <Route path="/profile" element={<ProtectedRoute><DonorProfileStats /></ProtectedRoute>} />
+        <Route path="/history" element={<ProtectedRoute><HistoryPage /></ProtectedRoute>} />
+        <Route path="/vitals" element={<ProtectedRoute><VitalCore /></ProtectedRoute>} />
+        <Route path="/admin" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
+
+        {/* Fallback */}
         <Route path="*" element={<Navigate to={isAuthenticated ? "/feed" : "/"} replace />} />
       </Routes>
       {isAuthenticated && <BottomNav />}
@@ -51,9 +71,11 @@ function AppContent() {
 
 function App() {
   return (
-    <AppDataProvider>
-      <AppContent />
-    </AppDataProvider>
+    <AuthProvider>
+      <AppDataProvider>
+        <AppContent />
+      </AppDataProvider>
+    </AuthProvider>
   );
 }
 

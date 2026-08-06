@@ -1,9 +1,22 @@
+import sys
+import os
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.database import init_db_pool, db_pool
+from app.middlewares.auth_middleware import JWTAuthMiddleware
+from app.routers import user_router, donor_router, recipient_router, admin_router
+
+import importlib.util
+
+# Dynamically load the compare_schema module from the parent directory to avoid name collisions with app/database.py
+schema_script_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../database/compare_schema.py'))
+spec = importlib.util.spec_from_file_location("compare_schema", schema_script_path)
+compare_schema = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(compare_schema)
+verify_schema = compare_schema.main
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -13,6 +26,15 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     logger.info("Starting up BloodPing API...")
     init_db_pool()
+    
+    # Audit database schema validity against definition files
+    logger.info("Verifying database schema...")
+    try:
+        verify_schema()
+    except Exception as e:
+        logger.critical(f"Database schema verification failed: {e}")
+        raise e
+        
     yield
     if db_pool is not None:
         db_pool.closeall()
@@ -26,6 +48,9 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# JWT Authentication Middleware
+app.add_middleware(JWTAuthMiddleware)
+
 # CORS Middleware setup
 app.add_middleware(
     CORSMiddleware,
@@ -34,6 +59,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Register routers
+app.include_router(user_router.router)
+app.include_router(donor_router.router)
+app.include_router(recipient_router.router)
+app.include_router(admin_router.router)
 
 
 @app.get("/")

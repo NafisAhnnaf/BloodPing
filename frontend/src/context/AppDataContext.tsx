@@ -1,5 +1,8 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { initialRequests, initialDonors } from '../services/mockData';
+import { useAuthStore } from '../stores/authStore';
+import { supabase } from '../services/supabaseClient';
+import apiClient from '../services/apiClient';
 
 export type RequestStatus = 'open' | 'pending' | 'completed' | 'canceled';
 export type ApplicationStatus = 'pending' | 'accepted' | 'completed' | 'rejected' | 'canceled';
@@ -57,9 +60,9 @@ interface AppDataContextType {
   currentUser: Donor;
   user: Donor | null;
   isAuthenticated: boolean;
-  login: (credentials: any, isDemo?: boolean) => void;
-  signup: (formData: any) => void;
-  logout: () => void;
+  login: (credentials: any, isDemo?: boolean) => Promise<void>;
+  signup: (formData: any) => Promise<void>;
+  logout: () => Promise<void>;
   applyToRequest: (reqId: number) => void;
   createRequest: (req: Omit<BloodRequest, 'id' | 'date' | 'status' | 'unitsFulfilled' | 'applicants' | 'applications'>) => void;
   updateRequest: (reqId: number, reqData: Partial<BloodRequest>) => void;
@@ -78,35 +81,86 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const [donors, setDonors] = useState<Donor[]>(initialDonors);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   
+  const session = useAuthStore(state => state.session);
+  const isAuth = useAuthStore(state => state.isAuthenticated);
   const [user, setUser] = useState<Donor | null>(null);
-  const isAuthenticated = !!user;
+
+  // Sync state from Zustand session
+  useEffect(() => {
+    if (session && session.user) {
+      setUser({
+        id: session.user.id as any,
+        name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'User',
+        units: 20, // default units
+        bloodType: 'O+', // default
+        phone: session.user.phone || '',
+      });
+    } else {
+      setUser(null);
+    }
+  }, [session]);
+
+  const isAuthenticated = isAuth;
   const currentUser = user || donors[0];
 
-  const login = (credentials: any, isDemo = false) => {
-    let foundUser = donors[0]; // Default mock user
-    if (isDemo && credentials.email === 'google_user@demo.com') {
-      foundUser = { id: 999, name: 'Google User', units: 50, bloodType: 'O+', phone: '+1 (555) 000-0000' };
+  const login = async (credentials: any, isDemo = false) => {
+    if (isDemo) {
+      let foundUser = donors[0]; // Default mock user
+      if (credentials.email === 'google_user@demo.com') {
+        foundUser = { id: 999, name: 'Google User', units: 50, bloodType: 'O+', phone: '+1 (555) 000-0000' };
+      }
+      setUser(foundUser);
+      useAuthStore.getState().setSession({
+        access_token: 'mock_token',
+        user: { id: foundUser.id.toString(), email: credentials.email, user_metadata: { full_name: foundUser.name } }
+      } as any);
+      addNotification({ recipientId: foundUser.id, message: 'Successfully logged in as Demo User.' });
+      return;
     }
-    setUser(foundUser);
-    addNotification({ recipientId: foundUser.id, message: 'Successfully logged in.' });
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: credentials.email,
+      password: credentials.password
+    });
+    if (error) {
+      throw error;
+    }
   };
 
-  const signup = (formData: any) => {
-    const newId = Date.now();
-    const newUser: Donor = {
-      id: newId,
-      name: formData.fullName,
-      units: 0,
-      bloodType: formData.bloodGroup,
-      age: new Date().getFullYear() - new Date(formData.dateOfBirth).getFullYear(),
-      phone: formData.phone,
-    };
-    setDonors(prev => [...prev, newUser]);
-    setUser(newUser);
-    addNotification({ recipientId: newId, message: 'Welcome to BloodPing! Your account has been created.' });
+  const signup = async (formData: any) => {
+    // 1. Sign up user in Supabase Auth
+    const { data, error } = await supabase.auth.signUp({
+      email: formData.email,
+      password: formData.password,
+      options: {
+        data: {
+          full_name: formData.fullName,
+        }
+      }
+    });
+    if (error) {
+      throw error;
+    }
+
+    // 2. Create the profile in our backend
+    if (data.user) {
+      try {
+        await apiClient.post('/users/', {
+          username: formData.username,
+          email: formData.email,
+          full_name: formData.fullName,
+          date_of_birth: formData.dateOfBirth,
+          phone: formData.phone,
+        });
+      } catch (err) {
+        console.error('Failed to register profile in backend database:', err);
+      }
+    }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    await supabase.auth.signOut();
+    useAuthStore.getState().clearSession();
     setUser(null);
   };
 

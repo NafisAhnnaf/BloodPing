@@ -113,6 +113,31 @@ CREATE TABLE public.recipients (
     updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Table: public.admins (Platform Administrators)
+CREATE TABLE public.admins (
+    id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id             UUID NOT NULL UNIQUE REFERENCES public.profiles(id) ON DELETE CASCADE,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Table: public.donor_applications (Candidate Donor Applications)
+CREATE TYPE public.application_status AS ENUM ('pending', 'approved', 'rejected');
+
+CREATE TABLE public.donor_applications (
+    id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id             UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    blood_group         public.blood_group NOT NULL,
+    travel_radius_km    NUMERIC(5,2) NOT NULL DEFAULT 10.0,
+    document_url        TEXT NOT NULL,                  -- Path to Supabase storage file
+    status              public.application_status NOT NULL DEFAULT 'pending',
+    rejection_reason    TEXT,
+    reviewed_by         UUID REFERENCES public.profiles(id),
+    reviewed_at         TIMESTAMPTZ,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- =============================================================================
 -- 4. MEDICAL LEDGER & LOGISTICS TABLES
 -- =============================================================================
@@ -230,3 +255,5 @@ CREATE INDEX idx_donation_requests_status ON public.donation_requests(status);
 CREATE INDEX idx_donation_matches_status ON public.donation_matches(status);
 CREATE INDEX idx_user_sessions_user ON public.user_sessions(user_id);
 CREATE INDEX idx_donations_donor ON public.donations(donor_id);
+CREATE INDEX idx_donor_apps_user ON public.donor_applications(user_id);
+CREATE INDEX idx_donor_apps_status ON public.donor_applications(status);
