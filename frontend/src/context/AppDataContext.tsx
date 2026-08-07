@@ -22,7 +22,7 @@ export interface NotificationItem {
 }
 
 export interface BloodRequest {
-  id: number;
+  id: string | number;
   hospital: string;
   address?: string;
   ward?: string;
@@ -63,12 +63,12 @@ interface AppDataContextType {
   login: (credentials: any, isDemo?: boolean) => Promise<void>;
   signup: (formData: any) => Promise<void>;
   logout: () => Promise<void>;
-  applyToRequest: (reqId: number) => void;
+  applyToRequest: (reqId: string | number) => void;
   createRequest: (req: Omit<BloodRequest, 'id' | 'date' | 'status' | 'unitsFulfilled' | 'applicants' | 'applications'>) => void;
-  updateRequest: (reqId: number, reqData: Partial<BloodRequest>) => void;
-  deleteRequest: (reqId: number) => void;
-  updateApplicationStatus: (reqId: number, donorId: number, newStatus: ApplicationStatus) => void;
-  cancelApplication: (reqId: number, reason: string) => void;
+  updateRequest: (reqId: string | number, reqData: Partial<BloodRequest>) => void;
+  deleteRequest: (reqId: string | number) => void;
+  updateApplicationStatus: (reqId: string | number, donorId: number, newStatus: ApplicationStatus) => void;
+  cancelApplication: (reqId: string | number, reason: string) => void;
   notifications: NotificationItem[];
   addNotification: (notif: Omit<NotificationItem, 'id' | 'timestamp' | 'read'>) => void;
   markNotificationsRead: () => void;
@@ -99,6 +99,45 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       setUser(null);
     }
   }, [session]);
+
+  const fetchRequests = async () => {
+    try {
+      const response = await apiClient.get('/requests/get-requests');
+      if (response.data && response.data.success) {
+        const dbRequests = response.data.payload.requests.map((req: any) => ({
+          id: req.id,
+          hospital: req.hospital_name,
+          address: req.hospital_address,
+          ward: '',
+          authorName: req.recipient_name || 'Anonymous Recipient',
+          description: req.notes || '',
+          contact: {
+            phone: req.recipient_phone || '',
+            email: ''
+          },
+          bloodGroup: req.blood_group,
+          unitsFulfilled: req.units_fulfilled || 0,
+          unitsRequired: req.units_required || 1,
+          distance: req.distance || 0.0,
+          urgent: req.is_urgent || false,
+          date: req.created_at,
+          deadline: req.required_by,
+          applicants: 0,
+          applications: [],
+          status: req.status
+        }));
+        setRequests(dbRequests);
+      }
+    } catch (err) {
+      console.error('Failed to fetch requests from backend:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (isAuth) {
+      fetchRequests();
+    }
+  }, [isAuth]);
 
   const isAuthenticated = isAuth;
   const currentUser = user || donors[0];
@@ -180,7 +219,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
   };
 
-  const applyToRequest = (reqId: number) => {
+  const applyToRequest = (reqId: string | number) => {
     setRequests(prev => prev.map(req => {
       if (req.id === reqId) {
         // Prevent duplicate applications
@@ -201,30 +240,50 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     }));
   };
 
-  const createRequest = (reqData: Omit<BloodRequest, 'id' | 'date' | 'status' | 'unitsFulfilled' | 'applicants' | 'applications'>) => {
-    const newReq: BloodRequest = {
-      ...reqData,
-      id: Date.now(),
-      date: new Date().toISOString(),
-      status: 'open',
-      unitsFulfilled: 0,
-      applicants: 0,
-      applications: []
-    };
-    setRequests(prev => [newReq, ...prev]);
+  const createRequest = async (reqData: Omit<BloodRequest, 'id' | 'date' | 'status' | 'unitsFulfilled' | 'applicants' | 'applications'>) => {
+    try {
+      const response = await apiClient.post('/requests/request-blood', {
+        blood_group: reqData.bloodGroup,
+        units_required: reqData.unitsRequired,
+        hospital_name: reqData.hospital,
+        hospital_lat: 0.0,
+        hospital_lng: 0.0,
+        hospital_address: reqData.address || 'Dhaka',
+        search_radius_km: reqData.preferredDistance || 10.0,
+        is_urgent: reqData.urgent || false,
+        notes: reqData.description,
+        required_by: reqData.deadline
+      });
+      if (response.data && response.data.success) {
+        await fetchRequests();
+      }
+    } catch (err) {
+      console.error('Failed to create donation request on backend:', err);
+      // Fallback: update in-memory state
+      const newReq: BloodRequest = {
+        ...reqData,
+        id: Date.now(),
+        date: new Date().toISOString(),
+        status: 'open',
+        unitsFulfilled: 0,
+        applicants: 0,
+        applications: []
+      };
+      setRequests(prev => [newReq, ...prev]);
+    }
   };
 
-  const updateRequest = (reqId: number, reqData: Partial<BloodRequest>) => {
+  const updateRequest = (reqId: string | number, reqData: Partial<BloodRequest>) => {
     setRequests(prev => prev.map(req => 
       req.id === reqId ? { ...req, ...reqData } : req
     ));
   };
 
-  const deleteRequest = (reqId: number) => {
+  const deleteRequest = (reqId: string | number) => {
     setRequests(prev => prev.filter(req => req.id !== reqId));
   };
 
-  const updateApplicationStatus = (reqId: number, donorId: number, newStatus: ApplicationStatus) => {
+  const updateApplicationStatus = (reqId: string | number, donorId: number, newStatus: ApplicationStatus) => {
     setRequests(prev => prev.map(req => {
       if (req.id === reqId) {
         let newUnitsFulfilled = req.unitsFulfilled;
@@ -274,7 +333,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     }));
   };
 
-  const cancelApplication = (reqId: number, reason: string) => {
+  const cancelApplication = (reqId: string | number, reason: string) => {
     setRequests(prev => prev.map(req => {
       if (req.id === reqId) {
         const app = req.applications.find(a => a.donorId === currentUser.id);
