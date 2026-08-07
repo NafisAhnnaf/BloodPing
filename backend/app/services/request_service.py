@@ -55,10 +55,23 @@ class RequestService:
                 )
                 recipient_row = cursor.fetchone()
                 if not recipient_row:
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail="Authenticated user is not registered as a recipient."
-                    )
+                    try:
+                        cursor.execute(
+                            """
+                            INSERT INTO public.recipients (user_id, is_active)
+                            VALUES (%s, TRUE)
+                            RETURNING id, is_active;
+                            """,
+                            (user_id,),
+                        )
+                        recipient_row = cursor.fetchone()
+                    except Exception as e:
+                        db.rollback()
+                        logger.error(f"Error auto-creating recipient in request creation: {e}")
+                        raise HTTPException(
+                            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                            detail="Failed to register user as recipient on-the-fly."
+                        )
                 if not recipient_row["is_active"]:
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
@@ -72,7 +85,17 @@ class RequestService:
                     cursor.execute(
                         """
                         SELECT * FROM public.create_blood_request(
-                            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                            %s::UUID,
+                            %s::public.blood_group,
+                            %s::SMALLINT,
+                            %s::TEXT,
+                            %s::DOUBLE PRECISION,
+                            %s::DOUBLE PRECISION,
+                            %s::TEXT,
+                            %s::NUMERIC(5,2),
+                            %s::BOOLEAN,
+                            %s::TEXT,
+                            %s::TIMESTAMPTZ
                         );
                         """,
                         (
