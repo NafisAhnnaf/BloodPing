@@ -7,10 +7,34 @@ logger = logging.getLogger(__name__)
 
 class MatchService:
     @staticmethod
-    def apply_to_request(request_id: str, donor_id: str) -> str:
+    def apply_to_request(request_id: str, donor_id: str, user_id: str) -> str:
         with get_db_connection() as db:
             with db.cursor() as cursor:
                 try:
+                    # 1. Verify donor belongs to caller
+                    cursor.execute("SELECT id FROM public.donors WHERE id = %s AND user_id = %s;", (donor_id, user_id))
+                    if not cursor.fetchone():
+                        raise HTTPException(
+                            status_code=status.HTTP_403_FORBIDDEN,
+                            detail="Donor profile does not belong to authenticated user."
+                        )
+
+                    # 2. Verify caller is not applying to their own request
+                    cursor.execute(
+                        """
+                        SELECT dr.id 
+                        FROM public.donation_requests dr
+                        JOIN public.recipients r ON dr.recipient_id = r.id
+                        WHERE dr.id = %s AND r.user_id = %s;
+                        """,
+                        (request_id, user_id)
+                    )
+                    if cursor.fetchone():
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="You cannot apply to your own donation request."
+                        )
+
                     cursor.execute(
                         "SELECT public.apply_to_donation_request(%s, %s);",
                         (request_id, donor_id),
@@ -18,15 +42,37 @@ class MatchService:
                     match_id = cursor.fetchone()[0]
                     db.commit()
                     return str(match_id)
+                except HTTPException:
+                    db.rollback()
+                    raise
                 except Exception as e:
                     db.rollback()
                     logger.error(f"Error applying to request: {e}")
                     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
     @staticmethod
-    def get_applications(request_id: str) -> List[Dict[str, Any]]:
+    def get_applications(request_id: str, user_id: str) -> List[Dict[str, Any]]:
         with get_db_connection() as db:
             with db.cursor() as cursor:
+                # Enforce that caller is the owner of the request
+                cursor.execute(
+                    """
+                    SELECT dr.id, r.user_id
+                    FROM public.donation_requests dr
+                    JOIN public.recipients r ON dr.recipient_id = r.id
+                    WHERE dr.id = %s;
+                    """,
+                    (request_id,)
+                )
+                req_row = cursor.fetchone()
+                if not req_row:
+                    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Donation request not found.")
+                if str(req_row["user_id"]) != str(user_id):
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="You do not have permission to view applicants for this request."
+                    )
+
                 cursor.execute(
                     """
                     SELECT m.id, m.request_id, m.donor_id, m.status, m.applied_at, m.accepted_at, m.confirmed_at,
@@ -65,9 +111,15 @@ class MatchService:
                 return result
 
     @staticmethod
-    def get_donor_matches(donor_id: str, match_status: str = None) -> List[Dict[str, Any]]:
+    def get_donor_matches(donor_id: str, user_id: str, match_status: str = None) -> List[Dict[str, Any]]:
         with get_db_connection() as db:
             with db.cursor() as cursor:
+                cursor.execute("SELECT id FROM public.donors WHERE id = %s AND user_id = %s;", (donor_id, user_id))
+                if not cursor.fetchone():
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Donor profile does not belong to authenticated user."
+                    )
                 query = "SELECT * FROM public.donation_matches WHERE donor_id = %s"
                 params = [donor_id]
                 if match_status:
@@ -91,52 +143,109 @@ class MatchService:
                 return result
                 
     @staticmethod
-    def update_match_status(match_id: str, new_status: str, note: str = None):
+    def update_match_status(match_id: str, new_status: str, user_id: str, note: str = None):
         with get_db_connection() as db:
             with db.cursor() as cursor:
                 try:
+                    # Enforce that caller is the owner of the associated donation request
+                    cursor.execute(
+                        """
+                        SELECT dr.id, r.user_id
+                        FROM public.donation_matches m
+                        JOIN public.donation_requests dr ON m.request_id = dr.id
+                        JOIN public.recipients r ON dr.recipient_id = r.id
+                        WHERE m.id = %s;
+                        """,
+                        (match_id,)
+                    )
+                    row = cursor.fetchone()
+                    if not row:
+                        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Match not found.")
+                    if str(row["user_id"]) != str(user_id):
+                        raise HTTPException(
+                            status_code=status.HTTP_403_FORBIDDEN,
+                            detail="You do not have permission to manage this applicant."
+                        )
+
                     cursor.execute(
                         "SELECT public.update_match_status(%s, %s::public.match_status, %s);",
                         (match_id, new_status, note),
                     )
                     db.commit()
+                except HTTPException:
+                    db.rollback()
+                    raise
                 except Exception as e:
                     db.rollback()
                     logger.error(f"Error updating match status: {e}")
                     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
     @staticmethod
-    def confirm_donation(match_id: str):
+    def confirm_donation(match_id: str, user_id: str):
         with get_db_connection() as db:
             with db.cursor() as cursor:
                 try:
+                    # Enforce that caller is the owner of the associated donation request
+                    cursor.execute(
+                        """
+                        SELECT dr.id, r.user_id
+                        FROM public.donation_matches m
+                        JOIN public.donation_requests dr ON m.request_id = dr.id
+                        JOIN public.recipients r ON dr.recipient_id = r.id
+                        WHERE m.id = %s;
+                        """,
+                        (match_id,)
+                    )
+                    row = cursor.fetchone()
+                    if not row:
+                        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Match not found.")
+                    if str(row["user_id"]) != str(user_id):
+                        raise HTTPException(
+                            status_code=status.HTTP_403_FORBIDDEN,
+                            detail="You do not have permission to confirm donation for this request."
+                        )
+
                     cursor.execute(
                         "SELECT public.confirm_donation(%s);",
                         (match_id,),
                     )
                     db.commit()
+                except HTTPException:
+                    db.rollback()
+                    raise
                 except Exception as e:
                     db.rollback()
                     logger.error(f"Error confirming donation: {e}")
                     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
                     
     @staticmethod
-    def withdraw_application(match_id: str):
+    def withdraw_application(match_id: str, user_id: str):
         with get_db_connection() as db:
             with db.cursor() as cursor:
                 try:
-                    cursor.execute("SELECT status FROM public.donation_matches WHERE id = %s", (match_id,))
+                    cursor.execute(
+                        """
+                        SELECT m.status, d.user_id
+                        FROM public.donation_matches m
+                        JOIN public.donors d ON m.donor_id = d.id
+                        WHERE m.id = %s;
+                        """,
+                        (match_id,)
+                    )
                     row = cursor.fetchone()
                     if not row:
                         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Match not found")
+                    if str(row["user_id"]) != str(user_id):
+                        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can only withdraw your own application.")
                     if row["status"] != "pending":
                         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Can only withdraw pending applications")
                     
                     cursor.execute("DELETE FROM public.donation_matches WHERE id = %s", (match_id,))
                     db.commit()
+                except HTTPException:
+                    db.rollback()
+                    raise
                 except Exception as e:
                     db.rollback()
-                    if isinstance(e, HTTPException):
-                        raise e
                     logger.error(f"Error withdrawing application: {e}")
                     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

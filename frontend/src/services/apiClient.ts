@@ -15,13 +15,21 @@ const apiClient = axios.create({
   },
 });
 
-// Interceptor to automatically attach JWT Bearer token from the Zustand auth store
+// Interceptor to automatically attach JWT Bearer token from the Zustand auth store or admin token
 apiClient.interceptors.request.use(
   (config) => {
-    const session = useAuthStore.getState().session;
-    if (session?.access_token) {
-      config.headers.Authorization = `Bearer ${session.access_token}`;
+    const adminToken = localStorage.getItem('admin_token');
+    const userToken = useAuthStore.getState().session?.access_token;
+
+    // Attach admin token for admin routes, or user token for general routes
+    if (config.url?.startsWith('/admins') && adminToken) {
+      config.headers.Authorization = `Bearer ${adminToken}`;
+    } else if (userToken) {
+      config.headers.Authorization = `Bearer ${userToken}`;
+    } else if (adminToken) {
+      config.headers.Authorization = `Bearer ${adminToken}`;
     }
+
     console.log(`[HTTP Request] ${config.method?.toUpperCase()} ${config.url}`, config.data || '');
     return config;
   },
@@ -30,7 +38,7 @@ apiClient.interceptors.request.use(
   }
 );
 
-// Interceptor to handle authentication failures (e.g. automatically log out on 401)
+// Interceptor to handle authentication failures and user suspensions
 apiClient.interceptors.response.use(
   (response) => {
     console.log(`[HTTP Response] ${response.config.method?.toUpperCase()} ${response.config.url} - Status: ${response.status}`, response.data);
@@ -38,13 +46,33 @@ apiClient.interceptors.response.use(
   },
   (error) => {
     console.error(`[HTTP Error] ${error.config?.method?.toUpperCase()} ${error.config?.url} - Status: ${error.response?.status || 'network_error'}`, error.response?.data || error.message);
-    if (error.response?.status === 401) {
-      // Clear token and session if backend rejects the credentials
+
+    // Handle User Suspension (403 Forbidden with is_banned flag)
+    if (error.response?.status === 403 && error.response?.data?.is_banned) {
+      const banReason = error.response.data.ban_reason || 'Account suspended by administrator.';
+      localStorage.setItem('ban_reason', banReason);
       useAuthStore.getState().clearSession();
-      // Revoke the session on Supabase auth client as well
       supabase.auth.signOut().catch((err) => {
-        console.error('Failed to revoke session on Supabase during 401 logout:', err);
+        console.error('Failed to revoke session on Supabase during ban logout:', err);
       });
+      if (window.location.pathname !== '/suspended') {
+        window.location.href = '/suspended';
+      }
+      return Promise.reject(error);
+    }
+
+    if (error.response?.status === 401) {
+      if (error.config?.url?.startsWith('/admins')) {
+        localStorage.removeItem('admin_token');
+        localStorage.removeItem('admin_user');
+      } else {
+        // Clear token and session if backend rejects the credentials
+        useAuthStore.getState().clearSession();
+        // Revoke the session on Supabase auth client as well
+        supabase.auth.signOut().catch((err) => {
+          console.error('Failed to revoke session on Supabase during 401 logout:', err);
+        });
+      }
     }
     return Promise.reject(error);
   }

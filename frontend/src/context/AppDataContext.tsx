@@ -25,6 +25,10 @@ export interface NotificationItem {
 
 export interface BloodRequest {
   id: string | number;
+  recipientId?: string;
+  recipientUserId?: string;
+  ownerId?: string;
+  isOwner?: boolean;
   hospital: string;
   address?: string;
   ward?: string;
@@ -116,8 +120,16 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
       const response = await apiClient.get('/requests/feed', { params });
       if (response.data && response.data.success) {
+        const currentAuthUserId = useAuthStore.getState().session?.user?.id;
         const dbRequests = response.data.payload.requests.map((req: any) => ({
           id: req.id,
+          recipientId: req.recipient_id,
+          recipientUserId: req.recipient_user_id,
+          ownerId: req.owner_id || req.recipient_user_id,
+          isOwner: req.is_owner ?? (currentAuthUserId && (
+            String(req.recipient_user_id) === String(currentAuthUserId) ||
+            String(req.owner_id) === String(currentAuthUserId)
+          )),
           hospital: req.hospital_name,
           address: req.hospital_address,
           hospitalLat: req.hospital_lat,
@@ -283,19 +295,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       if (response.data && response.data.success) {
         await fetchRequests();
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to create donation request on backend:', err);
-      // Fallback: update in-memory state
-      const newReq: BloodRequest = {
-        ...reqData,
-        id: Date.now(),
-        date: new Date().toISOString(),
-        status: 'open',
-        unitsFulfilled: 0,
-        applicants: 0,
-        applications: []
-      };
-      setRequests(prev => [newReq, ...prev]);
+      throw err;
     }
   };
 
@@ -321,27 +323,23 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         recipientId: 'recipient',
         message: 'Donation request updated successfully.',
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to update request on backend:', err);
-      // Fallback: local update
-      setRequests(prev => prev.map(req => 
-        req.id === reqId ? { ...req, ...reqData } : req
-      ));
+      throw err;
     }
   };
 
   const deleteRequest = async (reqId: string | number) => {
     try {
-      await requestService.cancelRequest(reqId);
+      await requestService.deleteRequest(reqId);
       await fetchRequests();
       addNotification({
         recipientId: 'recipient',
         message: 'Donation request cancelled successfully.',
       });
-    } catch (err) {
-      console.error('Failed to cancel request on backend:', err);
-      // Fallback: local remove
-      setRequests(prev => prev.filter(req => req.id !== reqId));
+    } catch (err: any) {
+      console.error('Failed to cancel/delete request on backend:', err);
+      throw err;
     }
   };
 

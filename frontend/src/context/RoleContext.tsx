@@ -7,7 +7,7 @@ type ApplicationStatus = 'pending' | 'rejected' | 'not_applied' | 'approved';
 
 interface RoleContextType {
   role: Role;
-  setRole: (role: Role) => void;
+  setRole: (role: Role) => Promise<boolean>;
   isDonorApproved: boolean;
   donorApplicationStatus: ApplicationStatus;
   rejectionReason: string | null;
@@ -70,7 +70,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     }
   }, [isAuthenticated]);
 
-  const setRole = async (newRole: Role) => {
+  const setRole = async (newRole: Role): Promise<boolean> => {
     setLoadingStatus(true);
     try {
       if (newRole === 'donor') {
@@ -78,6 +78,8 @@ export function RoleProvider({ children }: { children: ReactNode }) {
           await apiClient.get('/donors/me');
           setIsDonorApproved(true);
           setDonorApplicationStatus('approved');
+          setRoleState('donor');
+          return true;
         } catch (err: any) {
           setIsDonorApproved(false);
           if (err.response?.status === 404) {
@@ -94,6 +96,9 @@ export function RoleProvider({ children }: { children: ReactNode }) {
               setDonorApplicationStatus('not_applied');
             }
           }
+          // Non-approved donors must NOT be set to donor role
+          setRoleState('recipient');
+          return false;
         }
       } else {
         try {
@@ -101,10 +106,13 @@ export function RoleProvider({ children }: { children: ReactNode }) {
         } catch (err) {
           console.error('Error verifying recipient presence:', err);
         }
+        setRoleState('recipient');
+        return true;
       }
-      setRoleState(newRole);
     } catch (err) {
       console.error('Error switching role:', err);
+      setRoleState('recipient');
+      return false;
     } finally {
       setLoadingStatus(false);
     }

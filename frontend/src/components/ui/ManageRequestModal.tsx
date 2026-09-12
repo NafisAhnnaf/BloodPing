@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Check, CheckCircle, Edit2, Trash2, AlertTriangle, ChevronDown, ChevronUp, Download, Phone } from 'lucide-react';
 import { BloodRequest, useAppData, ApplicationStatus, Donor } from '../../context/AppDataContext';
+import { useAuthStore } from '../../stores/authStore';
 import { ConfirmActionModal } from './ConfirmActionModal';
 import { DatePicker } from './DatePicker';
 
@@ -12,10 +13,21 @@ interface ManageRequestModalProps {
 
 export function ManageRequestModal({ request, onClose }: ManageRequestModalProps) {
   const { updateApplicationStatus, updateRequest, deleteRequest, donors } = useAppData();
+  const authUser = useAuthStore(state => state.session?.user);
   const [isEditing, setIsEditing] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [expandedDonorId, setExpandedDonorId] = useState<number | null>(null);
-  
+
+  const isOwner = Boolean(
+    request.isOwner ?? 
+    (authUser && (
+      (request.recipientUserId && String(request.recipientUserId) === String(authUser.id)) || 
+      (request.ownerId && String(request.ownerId) === String(authUser.id))
+    ))
+  );
+
   const [unitsInput, setUnitsInput] = useState<string>(request.unitsRequired.toString());
 
   const [confirmAction, setConfirmAction] = useState<{
@@ -37,19 +49,65 @@ export function ManageRequestModal({ request, onClose }: ManageRequestModalProps
     deadline: request.deadline ? request.deadline.split('T')[0] : '',
   });
 
-  const handleSaveEdit = () => {
-    const parsedUnits = parseInt(unitsInput);
-    updateRequest(request.id, {
-      ...editForm,
-      unitsRequired: isNaN(parsedUnits) || parsedUnits < 1 ? 1 : parsedUnits,
-      deadline: editForm.deadline ? new Date(editForm.deadline).toISOString() : request.deadline,
-    });
-    setIsEditing(false);
+  if (!isOwner) {
+    return null;
+  }
+
+  const now = new Date();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+  const handleSaveEdit = async () => {
+    try {
+      setIsSubmitting(true);
+      setErrorMessage(null);
+
+      if (editForm.deadline && editForm.deadline < todayStr) {
+        setErrorMessage("Required by date cannot be in the past. Please select today or a future date.");
+        setIsSubmitting(false);
+        return;
+      }
+
+      const parsedUnits = parseInt(unitsInput);
+      const deadlineIso = editForm.deadline 
+        ? (editForm.deadline.includes('T') ? editForm.deadline : new Date(`${editForm.deadline}T23:59:59`).toISOString())
+        : request.deadline;
+
+      await updateRequest(request.id, {
+        ...editForm,
+        unitsRequired: isNaN(parsedUnits) || parsedUnits < 1 ? 1 : parsedUnits,
+        deadline: deadlineIso,
+      });
+      setIsEditing(false);
+    } catch (err: any) {
+      let msg = 'Failed to update donation request.';
+      if (err.response?.data?.detail) {
+        const detail = err.response.data.detail;
+        if (typeof detail === 'string') {
+          msg = detail;
+        } else if (Array.isArray(detail) && detail.length > 0) {
+          msg = detail.map((d: any) => d.msg || JSON.stringify(d)).join(', ');
+        }
+      } else if (err.message) {
+        msg = err.message;
+      }
+      setErrorMessage(msg);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleDelete = () => {
-    deleteRequest(request.id);
-    onClose();
+  const handleDelete = async () => {
+    try {
+      setIsSubmitting(true);
+      setErrorMessage(null);
+      await deleteRequest(request.id);
+      onClose();
+    } catch (err: any) {
+      const msg = err.response?.data?.detail || err.message || 'Failed to delete donation request.';
+      setErrorMessage(msg);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleActionClick = (donorId: number, status: ApplicationStatus) => {
@@ -121,6 +179,13 @@ export function ManageRequestModal({ request, onClose }: ManageRequestModalProps
             </button>
           </div>
 
+          {errorMessage && (
+            <div className="mb-4 p-3 bg-red-100 border border-red-200 text-red-700 text-xs font-bold rounded-xl flex items-center gap-2">
+              <AlertTriangle size={16} className="flex-shrink-0" />
+              <span>{errorMessage}</span>
+            </div>
+          )}
+
           {!isEditing && !isDeleting && (
             <div className="flex gap-2 mb-6">
               <button 
@@ -146,15 +211,17 @@ export function ManageRequestModal({ request, onClose }: ManageRequestModalProps
               <div className="flex gap-3 w-full">
                 <button 
                   onClick={() => setIsDeleting(false)}
-                  className="flex-1 py-3 rounded-xl font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors"
+                  disabled={isSubmitting}
+                  className="flex-1 py-3 rounded-xl font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button 
                   onClick={handleDelete}
-                  className="flex-1 py-3 rounded-xl font-bold text-white bg-red-600 hover:bg-red-700 transition-colors shadow-md"
+                  disabled={isSubmitting}
+                  className="flex-1 py-3 rounded-xl font-bold text-white bg-red-600 hover:bg-red-700 transition-colors shadow-md disabled:opacity-50"
                 >
-                  Yes, Delete
+                  {isSubmitting ? 'Deleting...' : 'Yes, Delete'}
                 </button>
               </div>
             </div>
@@ -185,6 +252,8 @@ export function ManageRequestModal({ request, onClose }: ManageRequestModalProps
                     <DatePicker 
                       value={editForm.deadline || ''}
                       onChange={val => setEditForm(prev => ({ ...prev, deadline: val }))}
+                      minDate={todayStr}
+                      disablePast={true}
                     />
                   </div>
                 </div>
@@ -264,15 +333,17 @@ export function ManageRequestModal({ request, onClose }: ManageRequestModalProps
               <div className="flex gap-3 mt-6 pt-4 border-t border-slate-100">
                 <button 
                   onClick={() => setIsEditing(false)}
-                  className="flex-1 py-3 rounded-xl font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors"
+                  disabled={isSubmitting}
+                  className="flex-1 py-3 rounded-xl font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button 
                   onClick={handleSaveEdit}
-                  className="flex-1 py-3 rounded-xl font-bold text-white bg-slate-900 hover:bg-slate-800 transition-colors shadow-md"
+                  disabled={isSubmitting}
+                  className="flex-1 py-3 rounded-xl font-bold text-white bg-slate-900 hover:bg-slate-800 transition-colors shadow-md disabled:opacity-50"
                 >
-                  Save Changes
+                  {isSubmitting ? 'Saving...' : 'Save Changes'}
                 </button>
               </div>
             </div>

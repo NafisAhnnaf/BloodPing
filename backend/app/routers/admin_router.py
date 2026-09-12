@@ -1,24 +1,187 @@
-from fastapi import APIRouter, Depends, status
-from app.core.auth import require_admin
+from typing import Optional
+from fastapi import APIRouter, Depends, Query, HTTPException, status
+from app.core.auth import requireAdmin
 from app.services.admin_service import AdminService
-from app.schemas.admin_schema import ApplicationReview
+from app.schemas.admin_schema import (
+    AdminLoginRequest,
+    ApplicationReviewRequest,
+    BanUserRequest,
+    AdminApiResponse,
+)
 
-router = APIRouter(prefix="/admins", tags=["Admins"])
+router = APIRouter(prefix="/admins", tags=["Admin"])
 
 
-@router.get("/applications")
-def get_donor_applications(admin_id: str = Depends(require_admin)):
-    return AdminService.get_all_applications(admin_id)
+@router.post("/login", response_model=AdminApiResponse)
+async def admin_login(data: AdminLoginRequest):
+    """
+    Authenticate administrator credentials and return access token.
+    Public endpoint.
+    """
+    try:
+        payload = await AdminService.admin_login(email=str(data.email), password=data.password)
+        return AdminApiResponse(
+            success=True,
+            payload=payload,
+            message="Administrator authentication successful."
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred during admin login: {str(e)}"
+        )
 
 
-@router.post("/applications/{id}/review")
-def review_donor_application(
-    id: str, data: ApplicationReview, admin_id: str = Depends(require_admin)
+@router.get("/applications", response_model=AdminApiResponse)
+async def get_applications(
+    status: Optional[str] = Query(None, description="Filter by status: pending, approved, rejected, or all"),
+    sort: Optional[str] = Query("newest", description="Sorting order: newest or oldest"),
+    search: Optional[str] = Query(None, description="Search term for full name, email, or blood group"),
+    admin_id: str = Depends(requireAdmin)
 ):
-    AdminService.review_application(
-        admin_id=admin_id,
-        application_id=id,
-        status=data.status,
-        rejection_reason=data.rejection_reason,
-    )
-    return {"message": f"Application has been successfully {data.status}."}
+    """
+    Retrieve donor candidate applications with filtering, sorting, and search capabilities.
+    Admin only.
+    """
+    try:
+        applications = await AdminService.get_applications(
+            status_filter=status,
+            sort=sort,
+            search=search
+        )
+        return AdminApiResponse(
+            success=True,
+            payload=applications,
+            message="Donor applications retrieved successfully."
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred while retrieving applications: {str(e)}"
+        )
+
+
+@router.post("/applications/{id}/review", response_model=AdminApiResponse)
+async def review_application(
+    id: str,
+    data: ApplicationReviewRequest,
+    admin_id: str = Depends(requireAdmin)
+):
+    """
+    Review (approve or reject) a donor application.
+    Admin only.
+    """
+    try:
+        res = await AdminService.review_application(
+            application_id=id,
+            admin_id=admin_id,
+            status_val=data.status,
+            rejection_reason=data.rejection_reason
+        )
+        return AdminApiResponse(
+            success=True,
+            payload=res,
+            message=f"Application has been successfully {data.status}."
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred while reviewing application: {str(e)}"
+        )
+
+
+@router.get("/users", response_model=AdminApiResponse)
+async def get_users(
+    page: int = Query(1, ge=1, description="Page number"),
+    limit: int = Query(20, ge=1, le=100, description="Items per page"),
+    search: Optional[str] = Query(None, description="Search term for name, username, or email"),
+    filter: str = Query("all", description="Filter type: all, active, banned, donors, recipients"),
+    admin_id: str = Depends(requireAdmin)
+):
+    """
+    Retrieve paginated list of user accounts with search and status filtering.
+    Admin only.
+    """
+    try:
+        users_payload = await AdminService.get_users(
+            page=page,
+            limit=limit,
+            search=search,
+            filter_type=filter
+        )
+        return AdminApiResponse(
+            success=True,
+            payload=users_payload,
+            message="Users retrieved successfully."
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred while retrieving users: {str(e)}"
+        )
+
+
+@router.post("/users/{id}/ban", response_model=AdminApiResponse)
+async def ban_user(
+    id: str,
+    data: BanUserRequest,
+    admin_id: str = Depends(requireAdmin)
+):
+    """
+    Suspend (ban) a user account, revoking active sessions and notifying the user.
+    Admin only.
+    """
+    try:
+        res = await AdminService.ban_user(
+            user_id=id,
+            admin_id=admin_id,
+            reason=data.reason
+        )
+        return AdminApiResponse(
+            success=True,
+            payload=res,
+            message="User suspended successfully."
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred while suspending user: {str(e)}"
+        )
+
+
+@router.post("/users/{id}/unban", response_model=AdminApiResponse)
+async def unban_user(
+    id: str,
+    admin_id: str = Depends(requireAdmin)
+):
+    """
+    Restore (unban) a user account and notify the user.
+    Admin only.
+    """
+    try:
+        res = await AdminService.unban_user(
+            user_id=id,
+            admin_id=admin_id
+        )
+        return AdminApiResponse(
+            success=True,
+            payload=res,
+            message="User account restored successfully."
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred while restoring user: {str(e)}"
+        )

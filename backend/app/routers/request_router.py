@@ -41,7 +41,7 @@ def get_feed(
 @router.get("/get-requests", response_model=StandardResponse)
 def get_requests(user_id: str = Depends(requireAuth)):
     """Retrieves all public blood donation requests."""
-    requests_list = RequestService.get_all_requests()
+    requests_list = RequestService.get_all_requests(user_id)
     return {
         "success": True,
         "message": "All blood donation requests retrieved successfully.",
@@ -52,7 +52,7 @@ def get_requests(user_id: str = Depends(requireAuth)):
 @router.get("/active", response_model=StandardResponse)
 def get_active_requests(user_id: str = Depends(requireAuth)):
     """Retrieves open, unexpired donation requests."""
-    active_list = RequestService.get_active_requests()
+    active_list = RequestService.get_active_requests(user_id)
     return {
         "success": True,
         "message": "Active donation requests retrieved successfully.",
@@ -85,7 +85,7 @@ def request_blood(request_data: BloodRequestCreate, user_id: str = Depends(requi
 @router.get("/{request_id}", response_model=StandardResponse)
 def get_request_by_id(request_id: str, user_id: str = Depends(requireAuth)):
     """Retrieves details of a specific blood donation request."""
-    request_details = RequestService.get_request_by_id(request_id)
+    request_details = RequestService.get_request_by_id(request_id, user_id)
     return {
         "success": True,
         "message": "Donation request details retrieved successfully.",
@@ -106,8 +106,8 @@ def get_request_status(request_id: str, user_id: str = Depends(requireAuth)):
 
 @router.get("/{request_id}/history", response_model=StandardResponse)
 def get_request_history(request_id: str, user_id: str = Depends(requireAuth)):
-    """Retrieves all donor applications and match statuses for a request."""
-    history = RequestService.get_request_history(request_id)
+    """Retrieves all donor applications and match statuses for a request (restricted to owning recipient)."""
+    history = RequestService.get_request_history(request_id, user_id)
     return {
         "success": True,
         "message": "Request applicant history retrieved successfully.",
@@ -138,6 +138,17 @@ def cancel_request(request_id: str, user_id: str = Depends(requireAuth)):
         "success": True,
         "message": "Donation request cancelled successfully.",
         "payload": {"request": cancelled_request}
+    }
+
+
+@router.delete("/{request_id}", response_model=StandardResponse)
+def delete_request(request_id: str, user_id: str = Depends(requireAuth)):
+    """Permanently deletes an unfulfilled donation request (restricted to owning recipient)."""
+    deleted_request = RequestService.delete_request(user_id, request_id)
+    return {
+        "success": True,
+        "message": "Donation request deleted successfully.",
+        "payload": {"request": deleted_request}
     }
 
 

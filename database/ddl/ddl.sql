@@ -71,6 +71,10 @@ CREATE TABLE public.profiles (
     bio                 TEXT,
     location            public.GEOGRAPHY(POINT, 4326),  -- PostGIS point (GPS lat/lng)
     location_name       TEXT,                           -- Human readable: "Dhaka, BD"
+    is_banned           BOOLEAN NOT NULL DEFAULT FALSE,
+    ban_reason          TEXT,
+    banned_at           TIMESTAMPTZ,
+    banned_by           UUID REFERENCES public.profiles(id),
     created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -277,10 +281,27 @@ WITH DATA;
 
 CREATE UNIQUE INDEX idx_leaderboard_donor_id ON public.leaderboard(donor_id);
 
+-- Table: public.notifications (User Notifications Ledger)
+CREATE TABLE public.notifications (
+    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id     UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    title       TEXT NOT NULL,
+    message     TEXT NOT NULL,
+    type        TEXT NOT NULL DEFAULT 'system' CHECK (type IN (
+                    'application_approved',
+                    'application_rejected',
+                    'account_banned',
+                    'system'
+                )),
+    is_read     BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- =============================================================================
 -- 6. INDEX OPTIMIZATION TUNING
 -- =============================================================================
 CREATE INDEX idx_profiles_location ON public.profiles USING GIST(location);
+CREATE INDEX idx_profiles_is_banned ON public.profiles(is_banned);
 CREATE INDEX idx_donation_requests_hospital_location ON public.donation_requests USING GIST(hospital_location);
 CREATE INDEX idx_donors_blood_group ON public.donors(blood_group);
 CREATE INDEX idx_donors_is_available ON public.donors(is_available);
@@ -296,3 +317,4 @@ CREATE INDEX idx_user_locations_user ON public.user_locations(user_id);
 CREATE UNIQUE INDEX uq_user_primary_location ON public.user_locations(user_id) WHERE (is_primary = TRUE);
 CREATE INDEX idx_points_history_donor ON public.points_history(donor_id);
 CREATE INDEX idx_points_history_created ON public.points_history(created_at DESC);
+CREATE INDEX idx_notifications_user ON public.notifications(user_id, is_read);

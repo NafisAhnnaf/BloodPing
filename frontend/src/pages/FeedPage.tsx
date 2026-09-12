@@ -108,6 +108,12 @@ export function FeedPage() {
     setCurrentPage(1);
   }, [activeGroup, searchQuery, maxDistance, urgencyFilter, sortBy]);
 
+  const myRequests = useMemo(() => requests.filter(r => r.isOwner), [requests]);
+  const myActiveRequests = useMemo(() => myRequests.filter(r => r.status === 'open'), [myRequests]);
+  const myFulfilledUnits = useMemo(() => myRequests.reduce((acc, r) => acc + (r.unitsFulfilled || 0), 0), [myRequests]);
+  const myRequiredUnits = useMemo(() => myRequests.reduce((acc, r) => acc + (r.unitsRequired || 0), 0), [myRequests]);
+  const fulfillmentPercent = myRequiredUnits > 0 ? Math.round((myFulfilledUnits / myRequiredUnits) * 100) : 0;
+
   return (
     <div className="font-sans relative">
       <Header />
@@ -134,7 +140,10 @@ export function FeedPage() {
                         Your Requests.
                       </h2>
                       <p className="text-white/90 text-sm md:text-base font-medium max-w-md mx-auto md:mx-0 leading-relaxed">
-                        You have 1 active request. Currently fulfilled 2 out of 4 required units.
+                        {myRequests.length === 0 
+                          ? "You have no blood requests yet. Click '+ Create Blood Request' below whenever blood is needed."
+                          : `You have created ${myRequests.length} blood request(s) (${myActiveRequests.length} active). Manage them and track donor applications below.`
+                        }
                       </p>
                     </>
                   )}
@@ -148,8 +157,13 @@ export function FeedPage() {
                     </>
                   ) : (
                     <>
-                      <p className="text-xs font-bold text-white/80 uppercase tracking-wider mb-1">Fulfilled</p>
-                      <p className="text-4xl font-black">50 <span className="text-xl font-bold opacity-80">%</span></p>
+                      <p className="text-xs font-bold text-white/80 uppercase tracking-wider mb-1">
+                        {myRequests.length > 0 ? 'Fulfilled' : 'My Requests'}
+                      </p>
+                      <p className="text-4xl font-black">
+                        {myRequests.length > 0 ? `${fulfillmentPercent}` : '0'} 
+                        <span className="text-xl font-bold opacity-80">{myRequests.length > 0 ? '%' : ''}</span>
+                      </p>
                     </>
                   )}
                </div>
