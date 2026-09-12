@@ -39,7 +39,7 @@ BEGIN
         updated_at = NOW()
     WHERE id = p_application_id;
 
-    -- If approved, insert or update the donors table
+    -- If approved, insert or update the donors table and send notification
     IF p_status = 'approved' THEN
         INSERT INTO public.donors (user_id, blood_group, travel_radius_km)
         VALUES (v_user_id, v_blood_group, v_travel_radius)
@@ -47,6 +47,30 @@ BEGIN
             blood_group = EXCLUDED.blood_group,
             travel_radius_km = EXCLUDED.travel_radius_km,
             updated_at = NOW();
+
+        INSERT INTO public.notifications (
+            user_id,
+            title,
+            message,
+            type
+        ) VALUES (
+            v_user_id,
+            'Donor Application Approved',
+            'Congratulations! Your donor application has been approved.',
+            'application_approved'
+        );
+    ELSIF p_status = 'rejected' THEN
+        INSERT INTO public.notifications (
+            user_id,
+            title,
+            message,
+            type
+        ) VALUES (
+            v_user_id,
+            'Donor Application Rejected',
+            'Your donor application was rejected. Reason: ' || COALESCE(p_rejection_reason, 'Not specified'),
+            'application_rejected'
+        );
     END IF;
 END;
 $$;
