@@ -3,6 +3,7 @@ import { initialRequests, initialDonors } from '../services/mockData';
 import { useAuthStore } from '../stores/authStore';
 import { supabase } from '../services/supabaseClient';
 import apiClient from '../services/apiClient';
+import { sessionService } from '../services/sessionService';
 
 export type RequestStatus = 'open' | 'pending' | 'completed' | 'canceled';
 export type ApplicationStatus = 'pending' | 'accepted' | 'completed' | 'rejected' | 'canceled';
@@ -136,6 +137,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (isAuth) {
       fetchRequests();
+      // Record user session audit record in PostgreSQL
+      sessionService.recordCurrentSession().catch((err) => {
+        console.debug('Session audit tracking:', err?.message || err);
+      });
     }
   }, [isAuth]);
 
