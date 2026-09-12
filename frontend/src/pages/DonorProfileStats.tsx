@@ -1,17 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { 
   User, Activity, Droplets, Calendar, UploadCloud, 
-  Settings, LogOut, ChevronRight, ShieldCheck
+  Settings, LogOut, ChevronRight, ShieldCheck, History
 } from 'lucide-react';
 import { Header } from '../components/layout/Header';
 import { useRole } from '../context/RoleContext';
+import { useAuth } from '../context/AuthContext';
 import apiClient from '../services/apiClient';
 import { supabase } from '../services/supabaseClient';
+import { SessionAuditModal } from '../components/profile/SessionAuditModal';
 
 export function DonorProfileStats() {
   const { role } = useRole();
+  const { logout } = useAuth();
   const [user, setUser] = useState<any>(null);
+
   const [loading, setLoading] = useState(true);
+  const [isSessionModalOpen, setIsSessionModalOpen] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -35,19 +40,25 @@ export function DonorProfileStats() {
 
   const settingsOptions = [
     { id: 'medical', icon: UploadCloud, title: 'Medical Documents', subtitle: 'Upload and verify records' },
+    { id: 'security', icon: History, title: 'Login & Session History', subtitle: 'Manage active devices, IP logs & security' },
     { id: 'privacy', icon: ShieldCheck, title: 'Privacy Settings', subtitle: 'Manage visibility and data' },
     { id: 'preferences', icon: Settings, title: 'Preferences', subtitle: 'Notifications and app settings' },
     { id: 'logout', icon: LogOut, title: 'Log Out', subtitle: 'Sign out of your account' },
   ];
 
   const handleOptionClick = async (id: string) => {
+    if (id === 'security') {
+      setIsSessionModalOpen(true);
+      return;
+    }
     if (id === 'logout') {
       try {
-        await supabase.auth.signOut();
+        await logout();
       } catch (err) {
         console.error('Failed to log out:', err);
       }
     }
+
   };
 
   if (loading) {
@@ -152,6 +163,12 @@ export function DonorProfileStats() {
           ))}
         </section>
       </main>
+
+      <SessionAuditModal 
+        isOpen={isSessionModalOpen} 
+        onClose={() => setIsSessionModalOpen(false)} 
+      />
     </div>
   );
 }
+

@@ -3,6 +3,7 @@ import { supabase } from '../services/supabaseClient';
 import { useAuthStore } from '../stores/authStore';
 import { Session, User } from '@supabase/supabase-js';
 import apiClient from '../services/apiClient';
+import { sessionService } from '../services/sessionService';
 
 interface AuthContextType {
   session: Session | null;
@@ -22,7 +23,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [hasProfile, setHasProfile] = useState<boolean | null>(null);
 
-  const checkProfilePresence = async (userId: string) => {
+  const checkProfilePresence = async (_userId: string) => {
     try {
       // Call backend `/users/me` (requires Bearer token, which our apiClient attaches)
       const response = await apiClient.get('/users/me');
@@ -84,7 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     hydrateSession();
 
     // Subscribe to auth state updates (sign in, sign out, redirects)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, activeSession) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, activeSession) => {
       if (activeSession) {
         setSession(activeSession);
         await checkProfilePresence(activeSession.user.id);
@@ -125,13 +126,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = async () => {
     setIsLoading(true);
     try {
+      await sessionService.logoutSession();
       await supabase.auth.signOut();
+    } catch (err) {
+      console.error('Logout error:', err);
     } finally {
       clearSession();
       setHasProfile(null);
       setIsLoading(false);
     }
   };
+
 
   const user = session ? session.user : null;
   const isAuthenticated = !!session;

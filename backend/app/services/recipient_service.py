@@ -17,7 +17,21 @@ class RecipientService:
                 )
                 row = cursor.fetchone()
                 if not row:
-                    return None
+                    try:
+                        cursor.execute(
+                            """
+                            INSERT INTO public.recipients (user_id, is_active)
+                            VALUES (%s, TRUE)
+                            RETURNING id, is_active;
+                            """,
+                            (user_id,),
+                        )
+                        row = cursor.fetchone()
+                        db.commit()
+                    except Exception as e:
+                        db.rollback()
+                        logger.error(f"Error auto-creating recipient status: {e}")
+                        return None
                 return {
                     "recipient_id": str(row["id"]),
                     "is_active": row["is_active"]
@@ -34,11 +48,25 @@ class RecipientService:
                 )
                 row = cursor.fetchone()
                 if not row:
-                    return None
+                    try:
+                        cursor.execute(
+                            """
+                            INSERT INTO public.recipients (user_id, is_active)
+                            VALUES (%s, TRUE)
+                            RETURNING id, user_id, is_active, created_at, updated_at;
+                            """,
+                            (user_id,),
+                        )
+                        row = cursor.fetchone()
+                        db.commit()
+                    except Exception as e:
+                        db.rollback()
+                        logger.error(f"Error auto-creating recipient details: {e}")
+                        return None
                 return {
                     "id": str(row["id"]),
                     "user_id": str(row["user_id"]),
                     "is_active": row["is_active"],
-                    "created_at": row["created_at"].isoformat(),
-                    "updated_at": row["updated_at"].isoformat(),
+                    "created_at": row["created_at"].isoformat() if row["created_at"] else None,
+                    "updated_at": row["updated_at"].isoformat() if row["updated_at"] else None,
                 }
