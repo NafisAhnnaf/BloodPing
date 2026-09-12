@@ -73,6 +73,7 @@ async def mark_notifications_as_read(user_id: str = Depends(requireAuth)):
                     """,
                     (user_id,)
                 )
+                db.commit()
                 return NotificationResponse(
                     success=True,
                     payload=None,
