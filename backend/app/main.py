@@ -15,7 +15,9 @@ from app.routers import (
     request_router,
     match_router,
     session_router,
+    notifications_router,
 )
+
 
 import importlib.util
 
@@ -76,6 +78,8 @@ app.include_router(admin_router.router)
 app.include_router(request_router.router)
 app.include_router(match_router.router)
 app.include_router(session_router.router)
+app.include_router(notifications_router.router)
+
 
 
 @app.get("/")
