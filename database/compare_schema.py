@@ -38,12 +38,13 @@ def parse_ddl_tables(ddl_path):
                     in_constraint = False
                 continue
             
-            # Detect starting a constraint definition
-            if line.startswith('CONSTRAINT') or line.startswith('PRIMARY KEY') or line.startswith('FOREIGN KEY') or line.startswith('UNIQUE') or line.startswith('CHECK'):
+            # Detect starting a constraint definition or inline multi-line CHECK constraint
+            if line.startswith('CONSTRAINT') or line.startswith('PRIMARY KEY') or line.startswith('FOREIGN KEY') or line.startswith('UNIQUE') or 'CHECK' in line:
                 paren_depth = line.count('(') - line.count(')')
                 if paren_depth > 0:
                     in_constraint = True
-                continue
+                if line.startswith('CONSTRAINT') or line.startswith('PRIMARY KEY') or line.startswith('FOREIGN KEY') or line.startswith('UNIQUE') or line.startswith('CHECK'):
+                    continue
             
             # If the line ends with a comma, strip it
             if line.endswith(','):

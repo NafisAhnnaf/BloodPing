@@ -13,7 +13,9 @@ import { AuthPage } from './components/ui/AuthPage';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ProtectedRoute, GuestRoute } from './components/layout/RouteProtection';
 import { SetupProfilePage } from './pages/SetupProfilePage';
-import { AdminDashboard } from './pages/AdminDashboard';
+import { AdminLogin } from './pages/admin/AdminLogin';
+import { AdminDashboard } from './pages/admin/AdminDashboard';
+import { Suspended } from './pages/Suspended';
 import { BecomeDonorScreen } from './components/ui/BecomeDonorScreen';
 
 function AppLayout() {
@@ -29,21 +31,29 @@ function AppLayout() {
     );
   }
 
-  const isAuthPage = location.pathname === '/login' || location.pathname === '/signup' || location.pathname === '/';
+  const isAdminPage = location.pathname.startsWith('/admin');
+  const isSuspendedPage = location.pathname === '/suspended';
+  const isAuthPage = location.pathname === '/login' || location.pathname === '/signup' || location.pathname === '/' || isSuspendedPage || isAdminPage;
 
   const bgClass = isAuthPage
-    ? "" // Let AuthPage handle its own full-screen background
+    ? "" // Let Auth/Admin/Suspended pages handle their own background
     : "pb-24 md:pb-0 min-h-screen bg-gradient-to-br from-yellow-100 to-red-200 text-slate-900 antialiased";
 
   return (
     <div className={bgClass}>
       <Routes>
-        {/* Guest Routes */}
+        {/* Guest & Special Routes */}
         <Route path="/" element={<GuestRoute><LandingPage /></GuestRoute>} />
         <Route path="/login" element={<GuestRoute><AuthPage /></GuestRoute>} />
         <Route path="/signup" element={<GuestRoute><AuthPage /></GuestRoute>} />
+        <Route path="/suspended" element={<Suspended />} />
 
-        {/* Protected Routes */}
+        {/* Admin Routes */}
+        <Route path="/admin/login" element={<AdminLogin />} />
+        <Route path="/admin/dashboard" element={<AdminDashboard />} />
+        <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
+
+        {/* Protected User Routes */}
         <Route path="/setup-profile" element={<ProtectedRoute><SetupProfilePage /></ProtectedRoute>} />
         <Route path="/feed" element={<ProtectedRoute><FeedPage /></ProtectedRoute>} />
         <Route path="/become-donor" element={<ProtectedRoute><BecomeDonorScreen /></ProtectedRoute>} />
@@ -51,12 +61,11 @@ function AppLayout() {
         <Route path="/profile" element={<ProtectedRoute><DonorProfileStats /></ProtectedRoute>} />
         <Route path="/history" element={<ProtectedRoute><HistoryPage /></ProtectedRoute>} />
         <Route path="/vitals" element={<ProtectedRoute><VitalCore /></ProtectedRoute>} />
-        <Route path="/admin" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to={isAuthenticated ? "/feed" : "/"} replace />} />
       </Routes>
-      {isAuthenticated && <BottomNav />}
+      {isAuthenticated && !isAdminPage && !isSuspendedPage && <BottomNav />}
     </div>
   );
 }
