@@ -64,26 +64,26 @@ BEGIN
     -- If live coordinates not provided or invalid, resolve from user_locations or profiles
     IF v_user_location IS NULL AND p_user_id IS NOT NULL THEN
         -- Check normalized user_locations table first
-        SELECT location INTO v_user_location
-        FROM public.user_locations
-        WHERE user_id = p_user_id AND is_primary = TRUE
-        ORDER BY updated_at DESC
+        SELECT ul.location INTO v_user_location
+        FROM public.user_locations ul
+        WHERE ul.user_id = p_user_id AND ul.is_primary = TRUE
+        ORDER BY ul.updated_at DESC
         LIMIT 1;
 
         -- Fallback to profiles table
         IF v_user_location IS NULL THEN
-            SELECT location INTO v_user_location
-            FROM public.profiles
-            WHERE id = p_user_id;
+            SELECT pr.location INTO v_user_location
+            FROM public.profiles pr
+            WHERE pr.id = p_user_id;
         END IF;
     END IF;
 
     -- 2. Fetch donor preferences (blood group and travel radius)
     IF p_user_id IS NOT NULL THEN
-        SELECT blood_group, travel_radius_km
+        SELECT dn.blood_group, dn.travel_radius_km
         INTO v_donor_blood, v_donor_travel_radius
-        FROM public.donors
-        WHERE user_id = p_user_id;
+        FROM public.donors dn
+        WHERE dn.user_id = p_user_id;
     END IF;
 
     -- 3. Determine effective search radius: explicit param -> donor's travel radius -> 25km default
