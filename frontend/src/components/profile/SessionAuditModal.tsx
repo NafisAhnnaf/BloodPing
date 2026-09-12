@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
-  History, X, Monitor, Smartphone, Globe, ShieldAlert, 
-  LogOut, Lock, CheckCircle2, Clock, RefreshCw, AlertCircle, Activity
+  History, X, Monitor, Smartphone, Globe, 
+  LogOut, CheckCircle2, Clock, RefreshCw, AlertCircle, Activity
 } from 'lucide-react';
 import { 
   sessionService, 
@@ -22,11 +22,6 @@ export function SessionAuditModal({ isOpen, onClose }: SessionAuditModalProps) {
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [revokingId, setRevokingId] = useState<string | null>(null);
-
-  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
-  const [password, setPassword] = useState('');
-  const [confirmingLogout, setConfirmingLogout] = useState(false);
-  const [passwordError, setPasswordError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const loadSessions = useCallback(async () => {
@@ -77,25 +72,6 @@ export function SessionAuditModal({ isOpen, onClose }: SessionAuditModalProps) {
     }
   };
 
-  const handleConfirmLogoutAll = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!password.trim()) return;
-    setConfirmingLogout(true);
-    setPasswordError(null);
-    try {
-      const count = await sessionService.terminateAllOtherSessions(password);
-      setShowPasswordDialog(false);
-      setPassword('');
-      setSuccessMessage(`Successfully logged out of ${count} other device(s).`);
-      await loadSessions();
-      setTimeout(() => setSuccessMessage(null), 4000);
-    } catch (err: any) {
-      console.error('Failed to terminate all sessions:', err);
-      setPasswordError(err?.response?.data?.detail || 'Invalid password provided.');
-    } finally {
-      setConfirmingLogout(false);
-    }
-  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
@@ -296,94 +272,7 @@ export function SessionAuditModal({ isOpen, onClose }: SessionAuditModalProps) {
           )}
         </div>
 
-        {/* Modal Footer / Global Revoke Button */}
-        <div className="p-4 md:p-6 border-t border-slate-100 bg-slate-50/50 flex flex-col gap-2">
-          <button
-            onClick={() => {
-              setPasswordError(null);
-              setPassword('');
-              setShowPasswordDialog(true);
-            }}
-            disabled={loading}
-            className="w-full py-3 px-4 rounded-2xl bg-red-50 hover:bg-red-100 disabled:opacity-50 border border-red-200 text-red-700 text-xs md:text-sm font-bold flex items-center justify-center gap-2 transition-all hover:shadow-sm"
-          >
-            <ShieldAlert size={16} />
-            Log Out All Other Devices
-          </button>
-          <p className="text-center text-[11px] font-semibold text-slate-500">
-            Revoking will immediately terminate access on all other active devices.
-          </p>
-        </div>
       </div>
-
-      {/* Password Confirmation Sub-Dialog */}
-      {showPasswordDialog && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150">
-          <div 
-            className="bg-white rounded-3xl p-6 shadow-2xl border border-slate-100 max-w-sm w-full flex flex-col gap-4 animate-in zoom-in-95 duration-150"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="w-12 h-12 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center mx-auto">
-              <Lock size={24} />
-            </div>
-            
-            <div className="text-center">
-              <h3 className="text-base font-extrabold text-slate-900">Confirm Password</h3>
-              <p className="text-xs text-slate-500 font-medium mt-1">
-                For security, please enter your password to log out of all other devices.
-              </p>
-            </div>
-
-            {passwordError && (
-              <div className="p-2.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-bold text-center">
-                {passwordError}
-              </div>
-            )}
-
-            <form onSubmit={handleConfirmLogoutAll} className="flex flex-col gap-4">
-              <div>
-                <input
-                  type="password"
-                  placeholder="Enter your current password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  autoFocus
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-red-500 text-sm"
-                />
-              </div>
-
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowPasswordDialog(false);
-                    setPassword('');
-                    setPasswordError(null);
-                  }}
-                  className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={confirmingLogout || !password.trim()}
-                  className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5 shadow-md shadow-red-200"
-                >
-                  {confirmingLogout ? (
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  ) : (
-                    <>
-                      <CheckCircle2 size={14} />
-                      Confirm
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
