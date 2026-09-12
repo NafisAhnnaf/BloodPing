@@ -3,7 +3,9 @@ import jwt
 from jwt import PyJWKClient
 from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi import Request
+from fastapi.responses import JSONResponse
 from app.config import settings
+from app.database import get_db_connection
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +43,31 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
                         audience="authenticated",
                     )
 
-                request.state.user_id = payload.get("sub")
+                user_id = payload.get("sub")
+                request.state.user_id = user_id
+
+                if user_id:
+                    # Check if the authenticated user account is banned
+                    try:
+                        with get_db_connection() as db:
+                            with db.cursor() as cursor:
+                                cursor.execute(
+                                    "SELECT is_banned, ban_reason FROM public.profiles WHERE id = %s;",
+                                    (user_id,)
+                                )
+                                profile = cursor.fetchone()
+                                if profile and profile.get("is_banned"):
+                                    ban_reason = profile.get("ban_reason") or "No specific reason provided."
+                                    return JSONResponse(
+                                        status_code=403,
+                                        content={
+                                            "detail": f"Your account has been suspended. Reason: {ban_reason}",
+                                            "is_banned": True,
+                                            "ban_reason": ban_reason,
+                                        },
+                                    )
+                    except Exception as db_err:
+                        logger.error(f"Error checking ban status for user {user_id}: {db_err}")
             except Exception as e:
                 logger.debug(f"JWT verification failed: {e}")
                 request.state.user_id = None
