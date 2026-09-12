@@ -98,6 +98,10 @@ def parse_ddl_tables(ddl_path):
                 norm_type = 'int8'
             elif 'numeric' in col_type:
                 norm_type = 'numeric'
+            elif 'double precision' in col_type or 'float8' in col_type:
+                norm_type = 'float8'
+            elif 'real' in col_type or 'float4' in col_type:
+                norm_type = 'float4'
             elif 'macaddr' in col_type:
                 norm_type = 'macaddr'
             elif 'date' in col_type:

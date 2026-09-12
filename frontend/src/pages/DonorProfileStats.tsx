@@ -9,6 +9,7 @@ import { useAuth } from '../context/AuthContext';
 import apiClient from '../services/apiClient';
 import { supabase } from '../services/supabaseClient';
 import { SessionAuditModal } from '../components/profile/SessionAuditModal';
+import { PreferencesModal } from '../components/profile/PreferencesModal';
 
 export function DonorProfileStats() {
   const { role } = useRole();
@@ -17,36 +18,36 @@ export function DonorProfileStats() {
 
   const [loading, setLoading] = useState(true);
   const [isSessionModalOpen, setIsSessionModalOpen] = useState(false);
+  const [isPreferencesModalOpen, setIsPreferencesModalOpen] = useState(false);
+
+  const fetchProfile = async () => {
+    try {
+      const res = await apiClient.get('/users/me');
+      setUser(res.data);
+    } catch (err) {
+      console.error('Error fetching user profile:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    let isMounted = true;
-    const fetchProfile = async () => {
-      try {
-        const res = await apiClient.get('/users/me');
-        if (isMounted) {
-          setUser(res.data);
-        }
-      } catch (err) {
-        console.error('Error fetching user profile:', err);
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
-      }
-    };
     fetchProfile();
-    return () => { isMounted = false; };
   }, []);
 
   const settingsOptions = [
+    { id: 'preferences', icon: Settings, title: 'Preferences', subtitle: 'Location, travel radius & alert settings' },
     { id: 'medical', icon: UploadCloud, title: 'Medical Documents', subtitle: 'Upload and verify records' },
     { id: 'security', icon: History, title: 'Login & Session History', subtitle: 'Manage active devices, IP logs & security' },
     { id: 'privacy', icon: ShieldCheck, title: 'Privacy Settings', subtitle: 'Manage visibility and data' },
-    { id: 'preferences', icon: Settings, title: 'Preferences', subtitle: 'Notifications and app settings' },
     { id: 'logout', icon: LogOut, title: 'Log Out', subtitle: 'Sign out of your account' },
   ];
 
   const handleOptionClick = async (id: string) => {
+    if (id === 'preferences') {
+      setIsPreferencesModalOpen(true);
+      return;
+    }
     if (id === 'security') {
       setIsSessionModalOpen(true);
       return;
@@ -58,7 +59,6 @@ export function DonorProfileStats() {
         console.error('Failed to log out:', err);
       }
     }
-
   };
 
   if (loading) {
@@ -167,6 +167,13 @@ export function DonorProfileStats() {
       <SessionAuditModal 
         isOpen={isSessionModalOpen} 
         onClose={() => setIsSessionModalOpen(false)} 
+      />
+
+      <PreferencesModal 
+        isOpen={isPreferencesModalOpen} 
+        onClose={() => setIsPreferencesModalOpen(false)} 
+        user={user}
+        onUpdated={fetchProfile}
       />
     </div>
   );

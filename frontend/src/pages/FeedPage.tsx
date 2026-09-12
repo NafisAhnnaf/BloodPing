@@ -233,7 +233,7 @@ export function FeedPage() {
                      <SelectDropdown
                        value={sortBy}
                        onChange={(val) => setSortBy(val as any)}
-                       options=[
+                       options={[
                          { label: 'Nearest First (Proximity)', value: 'nearest' },
                          { label: 'Most Urgent First', value: 'urgent' },
                          { label: 'Latest First', value: 'latest' },
