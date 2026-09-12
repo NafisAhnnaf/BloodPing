@@ -38,12 +38,13 @@ def parse_ddl_tables(ddl_path):
                     in_constraint = False
                 continue
             
-            # Detect starting a constraint definition
-            if line.startswith('CONSTRAINT') or line.startswith('PRIMARY KEY') or line.startswith('FOREIGN KEY') or line.startswith('UNIQUE') or line.startswith('CHECK'):
+            # Detect starting a constraint definition or inline multi-line CHECK constraint
+            if line.startswith('CONSTRAINT') or line.startswith('PRIMARY KEY') or line.startswith('FOREIGN KEY') or line.startswith('UNIQUE') or 'CHECK' in line:
                 paren_depth = line.count('(') - line.count(')')
                 if paren_depth > 0:
                     in_constraint = True
-                continue
+                if line.startswith('CONSTRAINT') or line.startswith('PRIMARY KEY') or line.startswith('FOREIGN KEY') or line.startswith('UNIQUE') or line.startswith('CHECK'):
+                    continue
             
             # If the line ends with a comma, strip it
             if line.endswith(','):
@@ -163,7 +164,7 @@ def get_database_schema(db_url):
     return db_tables, routines
 
 def scan_local_routines(plpgsql_dir):
-    routines = []
+    routines = set()
     for root, dirs, files in os.walk(plpgsql_dir):
         for file in files:
             if file.endswith('.sql'):
@@ -171,8 +172,8 @@ def scan_local_routines(plpgsql_dir):
                 name = file.replace('.sql', '')
                 # Strip numeric prefixes (e.g. 03_get_user_role -> get_user_role)
                 name = re.sub(r'^\d+_', '', name)
-                routines.append(name.lower())
-    return routines
+                routines.add(name.lower())
+    return list(routines)
 
 def main():
     ddl_path = os.path.join(os.path.dirname(__file__), 'ddl/ddl.sql')

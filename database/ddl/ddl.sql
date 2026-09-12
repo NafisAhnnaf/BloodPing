@@ -113,6 +113,7 @@ CREATE TABLE public.donors (
     total_donations         INTEGER NOT NULL DEFAULT 0 CHECK (total_donations >= 0),
     current_streak          INTEGER NOT NULL DEFAULT 0 CHECK (current_streak >= 0),
     longest_streak          INTEGER NOT NULL DEFAULT 0 CHECK (longest_streak >= 0),
+    total_points            INTEGER NOT NULL DEFAULT 0 CHECK (total_points >= 0),
     last_donation_at        TIMESTAMPTZ,
     created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -233,6 +234,24 @@ CREATE TABLE public.donations (
     donor_location  public.GEOGRAPHY(POINT, 4326)       -- Geometric snapshot for analytical engines
 );
 
+-- Table: public.points_history (Gamification & Points Audit Ledger)
+CREATE TABLE public.points_history (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    donor_id        UUID NOT NULL REFERENCES public.donors(id) ON DELETE CASCADE,
+    match_id        UUID REFERENCES public.donation_matches(id) ON DELETE SET NULL,
+    action_type     VARCHAR(30) NOT NULL CHECK (action_type IN (
+        'DONATION_COMPLETED', 
+        'CANCELLATION_PENALTY', 
+        'NO_SHOW_PENALTY', 
+        'STREAK_BONUS', 
+        'MILESTONE_BONUS', 
+        'FIRST_DONATION_BONUS'
+    )),
+    points          INTEGER NOT NULL,
+    description     TEXT,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- =============================================================================
 -- 5. ANALYTICAL WORKLOADS & VIEWS
 -- =============================================================================
@@ -247,9 +266,10 @@ SELECT
     d.total_donations,
     d.current_streak,
     d.longest_streak,
+    d.total_points,
     d.last_donation_at,
-    RANK() OVER (ORDER BY d.total_donations DESC, d.current_streak DESC) AS rank_overall,
-    RANK() OVER (PARTITION BY d.blood_group ORDER BY d.total_donations DESC) AS rank_by_blood_group
+    RANK() OVER (ORDER BY d.total_points DESC, d.total_donations DESC) AS rank_overall,
+    RANK() OVER (PARTITION BY d.blood_group ORDER BY d.total_points DESC) AS rank_by_blood_group
 FROM public.donors d
 JOIN public.profiles p ON p.id = d.user_id
 WHERE d.total_donations > 0
@@ -274,3 +294,5 @@ CREATE INDEX idx_donor_apps_status ON public.donor_applications(status);
 CREATE INDEX idx_user_locations_spatial ON public.user_locations USING GIST(location);
 CREATE INDEX idx_user_locations_user ON public.user_locations(user_id);
 CREATE UNIQUE INDEX uq_user_primary_location ON public.user_locations(user_id) WHERE (is_primary = TRUE);
+CREATE INDEX idx_points_history_donor ON public.points_history(donor_id);
+CREATE INDEX idx_points_history_created ON public.points_history(created_at DESC);
