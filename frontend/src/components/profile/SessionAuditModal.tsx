@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
   History, X, Monitor, Smartphone, Globe, ShieldAlert, 
-  LogOut, Lock, CheckCircle2, Clock, RefreshCw, AlertCircle
+  LogOut, Lock, CheckCircle2, Clock, RefreshCw, AlertCircle, Activity
 } from 'lucide-react';
 import { 
   sessionService, 
@@ -45,12 +45,7 @@ export function SessionAuditModal({ isOpen, onClose }: SessionAuditModalProps) {
 
   useEffect(() => {
     if (isOpen) {
-      // Ensure the current device session is actively logged, then load all records
-      sessionService.recordCurrentSession()
-        .catch(() => {})
-        .finally(() => {
-          loadSessions();
-        });
+      loadSessions();
       setActionError(null);
       setSuccessMessage(null);
     }
@@ -202,9 +197,13 @@ export function SessionAuditModal({ isOpen, onClose }: SessionAuditModalProps) {
                           <Globe size={13} className="text-slate-400" />
                           IP: {currentSession.ip_address}
                         </span>
-                        <span className="flex items-center gap-1">
+                        <span className="flex items-center gap-1" title={formatSessionDate(currentSession.created_at)}>
                           <Clock size={13} className="text-slate-400" />
-                          Started: {formatSessionDate(currentSession.created_at)}
+                          Started: {formatRelativeTime(currentSession.created_at)}
+                        </span>
+                        <span className="flex items-center gap-1" title={formatSessionDate(currentSession.last_active_at)}>
+                          <Activity size={13} className="text-slate-400" />
+                          Last active: {formatRelativeTime(currentSession.last_active_at)}
                         </span>
                       </div>
                     </div>

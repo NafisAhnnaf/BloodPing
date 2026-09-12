@@ -204,10 +204,16 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
+    try {
+      await sessionService.logoutSession();
+    } catch (err) {
+      console.warn('Backend logout notification failed:', err);
+    }
     await supabase.auth.signOut();
     useAuthStore.getState().clearSession();
     setUser(null);
   };
+
 
   const addNotification = (notif: Omit<NotificationItem, 'id' | 'timestamp' | 'read'>) => {
     setNotifications(prev => [

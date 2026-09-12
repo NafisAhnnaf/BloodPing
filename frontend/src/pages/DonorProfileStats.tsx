@@ -5,13 +5,16 @@ import {
 } from 'lucide-react';
 import { Header } from '../components/layout/Header';
 import { useRole } from '../context/RoleContext';
+import { useAuth } from '../context/AuthContext';
 import apiClient from '../services/apiClient';
 import { supabase } from '../services/supabaseClient';
 import { SessionAuditModal } from '../components/profile/SessionAuditModal';
 
 export function DonorProfileStats() {
   const { role } = useRole();
+  const { logout } = useAuth();
   const [user, setUser] = useState<any>(null);
+
   const [loading, setLoading] = useState(true);
   const [isSessionModalOpen, setIsSessionModalOpen] = useState(false);
 
@@ -50,11 +53,12 @@ export function DonorProfileStats() {
     }
     if (id === 'logout') {
       try {
-        await supabase.auth.signOut();
+        await logout();
       } catch (err) {
         console.error('Failed to log out:', err);
       }
     }
+
   };
 
   if (loading) {
