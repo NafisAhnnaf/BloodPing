@@ -6,6 +6,7 @@ from app.schemas.admin_schema import (
     AdminLoginRequest,
     ApplicationReviewRequest,
     BanUserRequest,
+    RoleRemovalRequest,
     AdminApiResponse,
 )
 
@@ -185,3 +186,66 @@ async def unban_user(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"An unexpected error occurred while restoring user: {str(e)}"
         )
+
+
+@router.post("/users/{id}/remove-donor", response_model=AdminApiResponse)
+async def remove_donor(
+    id: str,
+    data: Optional[RoleRemovalRequest] = None,
+    admin_id: str = Depends(requireAdmin)
+):
+    """
+    Deactivate donor privileges for a user.
+    Admin only.
+    """
+    try:
+        reason = data.reason if data else None
+        res = await AdminService.remove_donor_role(
+            user_id=id,
+            admin_id=admin_id,
+            reason=reason
+        )
+        return AdminApiResponse(
+            success=True,
+            payload=res,
+            message="Donor role removed successfully."
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred while removing donor role: {str(e)}"
+        )
+
+
+@router.post("/users/{id}/remove-recipient", response_model=AdminApiResponse)
+async def remove_recipient(
+    id: str,
+    data: Optional[RoleRemovalRequest] = None,
+    admin_id: str = Depends(requireAdmin)
+):
+    """
+    Deactivate recipient privileges for a user.
+    Admin only.
+    """
+    try:
+        reason = data.reason if data else None
+        res = await AdminService.remove_recipient_role(
+            user_id=id,
+            admin_id=admin_id,
+            reason=reason
+        )
+        return AdminApiResponse(
+            success=True,
+            payload=res,
+            message="Recipient role removed successfully."
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred while removing recipient role: {str(e)}"
+        )
+

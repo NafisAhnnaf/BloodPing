@@ -33,8 +33,11 @@ export interface AdminUserItem {
   is_banned: boolean;
   ban_reason?: string | null;
   banned_at?: string | null;
-  created_at?: string | null;
   roles: string[];
+  is_donor?: boolean;
+  is_recipient?: boolean;
+  donor_active?: boolean;
+  recipient_active?: boolean;
   donor_stats?: {
     blood_group: string;
     total_donations: number;
@@ -122,6 +125,22 @@ export const adminService = {
    */
   async unbanUser(userId: string): Promise<ApiResponse<any>> {
     const res = await apiClient.post(`/admins/users/${userId}/unban`);
+    return res.data;
+  },
+
+  /**
+   * Remove donor role from user
+   */
+  async removeDonorRole(userId: string, reason?: string): Promise<ApiResponse<any>> {
+    const res = await apiClient.post(`/admins/users/${userId}/remove-donor`, { reason });
+    return res.data;
+  },
+
+  /**
+   * Remove recipient role from user
+   */
+  async removeRecipientRole(userId: string, reason?: string): Promise<ApiResponse<any>> {
+    const res = await apiClient.post(`/admins/users/${userId}/remove-recipient`, { reason });
     return res.data;
   },
 };

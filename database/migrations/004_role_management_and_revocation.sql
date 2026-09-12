@@ -1,3 +1,16 @@
+-- =============================================================================
+-- Migration: 004_role_management_and_revocation.sql
+-- Description: Add is_active flag to donors, update get_user_role, and support role revocation
+-- Platform: PostgreSQL / Supabase
+-- =============================================================================
+
+-- 1. Add is_active column to public.donors table
+ALTER TABLE public.donors
+ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
+
+CREATE INDEX IF NOT EXISTS idx_donors_is_active ON public.donors(is_active);
+
+-- 2. Update get_user_role function to check is_active
 CREATE OR REPLACE FUNCTION public.get_user_role(p_user_id UUID)
 RETURNS TEXT
 LANGUAGE plpgsql
@@ -29,4 +42,4 @@ EXCEPTION
 END;
 $$;
 
-COMMENT ON FUNCTION public.get_user_role(UUID) IS 'Determines if a user acts as a donor, recipient, both, or neither based on records in respective tables.';
+COMMENT ON FUNCTION public.get_user_role(UUID) IS 'Determines if a user acts as a donor, recipient, both, or neither based on active records in respective tables.';

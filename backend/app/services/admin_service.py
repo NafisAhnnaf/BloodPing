@@ -216,9 +216,9 @@ class AdminService:
                     elif filter_type == 'banned':
                         base_query += " AND p.is_banned IS TRUE"
                     elif filter_type == 'donors':
-                        base_query += " AND d.id IS NOT NULL"
+                        base_query += " AND d.id IS NOT NULL AND d.is_active IS TRUE"
                     elif filter_type == 'recipients':
-                        base_query += " AND r.id IS NOT NULL"
+                        base_query += " AND r.id IS NOT NULL AND r.is_active IS TRUE"
 
                     # Apply search filter
                     if search and search.strip():
@@ -244,14 +244,16 @@ class AdminService:
                             p.ban_reason,
                             p.banned_at,
                             p.created_at,
-                            (d.id IS NOT NULL) as is_donor,
-                            (r.id IS NOT NULL) as is_recipient,
+                            (d.id IS NOT NULL AND d.is_active IS TRUE) as is_donor,
+                            (r.id IS NOT NULL AND r.is_active IS TRUE) as is_recipient,
                             (a.id IS NOT NULL) as is_admin,
+                            d.is_active as donor_active,
+                            r.is_active as recipient_active,
                             d.blood_group,
                             d.total_donations,
                             d.total_points
                         {base_query}
-                        ORDER BY p.created_at DESC
+                        ORDER BY COALESCE(au.last_sign_in_at, p.created_at) DESC
                         LIMIT %s OFFSET %s;
                     """
                     exec_params = list(params) + [limit, offset]
@@ -270,6 +272,10 @@ class AdminService:
                             "ban_reason": r["ban_reason"],
                             "banned_at": r["banned_at"].isoformat() if r["banned_at"] else None,
                             "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+                            "is_donor": bool(r["is_donor"]),
+                            "is_recipient": bool(r["is_recipient"]),
+                            "donor_active": bool(r["donor_active"]) if r["donor_active"] is not None else False,
+                            "recipient_active": bool(r["recipient_active"]) if r["recipient_active"] is not None else False,
                             "roles": [
                                 role for role, active in [
                                     ("admin", r["is_admin"]),
@@ -369,3 +375,132 @@ class AdminService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Failed to unban user: {str(e)}"
             )
+
+    @staticmethod
+    async def remove_donor_role(user_id: str, admin_id: str, reason: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Deactivates donor privileges for a user, updates application state, and sends notification.
+        """
+        try:
+            with get_db_connection() as db:
+                with db.cursor() as cursor:
+                    # 1. Check user exists and has donor record
+                    cursor.execute(
+                        "SELECT id, is_active FROM public.donors WHERE user_id = %s;",
+                        (user_id,)
+                    )
+                    donor_row = cursor.fetchone()
+                    if not donor_row:
+                        raise HTTPException(
+                            status_code=status.HTTP_404_NOT_FOUND,
+                            detail="Donor record not found for this user."
+                        )
+
+                    # 2. Deactivate in public.donors
+                    cursor.execute(
+                        """
+                        UPDATE public.donors 
+                        SET is_active = FALSE, is_available = FALSE, updated_at = NOW() 
+                        WHERE user_id = %s;
+                        """,
+                        (user_id,)
+                    )
+
+                    # 3. Update donor application status if exists
+                    revocation_note = reason.strip() if reason and reason.strip() else "Donor privileges revoked by platform administration."
+                    cursor.execute(
+                        """
+                        UPDATE public.donor_applications
+                        SET status = 'rejected',
+                            rejection_reason = %s,
+                            reviewed_by = %s,
+                            reviewed_at = NOW(),
+                            updated_at = NOW()
+                        WHERE user_id = %s;
+                        """,
+                        (
+                            revocation_note,
+                            admin_id,
+                            user_id
+                        )
+                    )
+
+                    # 4. Create notification for user
+                    cursor.execute(
+                        """
+                        INSERT INTO public.notifications (user_id, title, message, type)
+                        VALUES (%s, %s, %s, 'system');
+                        """,
+                        (
+                            user_id,
+                            "Donor Privileges Revoked",
+                            revocation_note
+                        )
+                    )
+                    db.commit()
+
+            return {"success": True, "message": "Donor role removed successfully."}
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Error removing donor role for user {user_id}: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to remove donor role: {str(e)}"
+            )
+
+    @staticmethod
+    async def remove_recipient_role(user_id: str, admin_id: str, reason: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Deactivates recipient privileges for a user and sends notification.
+        """
+        try:
+            with get_db_connection() as db:
+                with db.cursor() as cursor:
+                    # 1. Check user exists and has recipient record
+                    cursor.execute(
+                        "SELECT id, is_active FROM public.recipients WHERE user_id = %s;",
+                        (user_id,)
+                    )
+                    rec_row = cursor.fetchone()
+                    if not rec_row:
+                        raise HTTPException(
+                            status_code=status.HTTP_404_NOT_FOUND,
+                            detail="Recipient record not found for this user."
+                        )
+
+                    # 2. Deactivate in public.recipients
+                    cursor.execute(
+                        """
+                        UPDATE public.recipients 
+                        SET is_active = FALSE, updated_at = NOW() 
+                        WHERE user_id = %s;
+                        """,
+                        (user_id,)
+                    )
+
+                    # 3. Create notification for user
+                    revocation_note = reason.strip() if reason and reason.strip() else "Your recipient requesting privileges have been deactivated by platform administrators."
+                    cursor.execute(
+                        """
+                        INSERT INTO public.notifications (user_id, title, message, type)
+                        VALUES (%s, %s, %s, 'system');
+                        """,
+                        (
+                            user_id,
+                            "Recipient Privileges Revoked",
+                            revocation_note
+                        )
+                    )
+                    db.commit()
+
+            return {"success": True, "message": "Recipient role removed successfully."}
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Error removing recipient role for user {user_id}: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to remove recipient role: {str(e)}"
+            )
+
