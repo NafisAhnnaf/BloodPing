@@ -392,3 +392,48 @@ class RequestService:
                         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                         detail="Failed to retrieve request applicant history."
                     )
+
+    @staticmethod
+    def get_feed(
+        user_id: Optional[str] = None,
+        lat: Optional[float] = None,
+        lng: Optional[float] = None,
+        radius_km: Optional[float] = None,
+        blood_group: Optional[str] = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> List[Dict[str, Any]]:
+        """Retrieves proximity-ranked blood donation feed via public.get_personalized_feed."""
+        with get_db_connection() as db:
+            with db.cursor() as cursor:
+                try:
+                    cursor.execute(
+                        """
+                        SELECT * FROM public.get_personalized_feed(
+                            %s::UUID,
+                            %s::DOUBLE PRECISION,
+                            %s::DOUBLE PRECISION,
+                            %s::NUMERIC,
+                            %s::public.blood_group,
+                            %s::INTEGER,
+                            %s::INTEGER
+                        );
+                        """,
+                        (user_id, lat, lng, radius_km, blood_group, limit, offset),
+                    )
+                    rows = cursor.fetchall()
+                    result = []
+                    for r in rows:
+                        row_dict = _format_request_row(r)
+                        row_dict["distance"] = float(r.get("distance_km", 0.0))
+                        row_dict["distance_km"] = float(r.get("distance_km", 0.0))
+                        row_dict["match_score"] = float(r.get("match_score", 0.0)) if r.get("match_score") is not None else None
+                        result.append(row_dict)
+                    return result
+                except Exception as e:
+                    logger.error(f"Error fetching personalized feed for user {user_id}: {e}")
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail="Failed to retrieve donation feed."
+                    )
+

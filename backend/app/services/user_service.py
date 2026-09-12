@@ -35,15 +35,16 @@ class UserService:
                         p.date_of_birth,
                         p.phone,
                         p.bio,
-                        p.location_name,
-                        ST_Y(p.location::geometry) as latitude,
-                        ST_X(p.location::geometry) as longitude,
+                        COALESCE(ul.location_name, p.location_name) as location_name,
+                        COALESCE(ST_Y(ul.location::geometry), ST_Y(p.location::geometry)) as latitude,
+                        COALESCE(ST_X(ul.location::geometry), ST_X(p.location::geometry)) as longitude,
                         d.blood_group,
                         d.travel_radius_km,
                         public.get_user_role(p.id) as system_role
                     FROM public.profiles p
                     JOIN auth.users au ON au.id = p.id
                     LEFT JOIN public.donors d ON d.user_id = p.id
+                    LEFT JOIN public.user_locations ul ON ul.user_id = p.id AND ul.is_primary = TRUE
                     WHERE p.id = %s;
                     """,
                     (user_id,),
@@ -135,6 +136,44 @@ class UserService:
                     (user_id,),
                 )
 
+                # If donor attributes supplied, upsert donors table
+                if u.blood_group:
+                    cursor.execute(
+                        """
+                        INSERT INTO donors (user_id, blood_group, travel_radius_km, is_available)
+                        VALUES (%s, %s::public.blood_group, COALESCE(%s, 15.0), TRUE)
+                        ON CONFLICT (user_id) DO UPDATE SET
+                            blood_group = EXCLUDED.blood_group,
+                            travel_radius_km = COALESCE(EXCLUDED.travel_radius_km, donors.travel_radius_km);
+                        """,
+                        (user_id, u.blood_group, u.travel_radius_km),
+                    )
+
+                # If coordinates supplied, invoke PL/pgSQL upsert_user_location procedure
+                if u.latitude is not None and u.longitude is not None:
+                    cursor.execute(
+                        """
+                        CALL public.upsert_user_location(
+                            %s::UUID,
+                            %s::DOUBLE PRECISION,
+                            %s::DOUBLE PRECISION,
+                            %s::TEXT,
+                            'Primary',
+                            %s::TEXT,
+                            %s::DOUBLE PRECISION,
+                            TRUE
+                        );
+                        """,
+                        (
+                            user_id,
+                            u.latitude,
+                            u.longitude,
+                            u.location_name,
+                            u.location_source or "browser_gps",
+                            u.accuracy_meters,
+                        ),
+                    )
+
                 db.commit()
                 if new_user is None:
                     raise ValueError("Failed to create or update user profile.")
@@ -187,6 +226,45 @@ class UserService:
                     ),
                 )
                 updated_user = cursor.fetchone()
+
+                # Update donor preferences if provided
+                if u.blood_group or u.travel_radius_km:
+                    cursor.execute(
+                        """
+                        INSERT INTO donors (user_id, blood_group, travel_radius_km, is_available)
+                        VALUES (%s, COALESCE(%s::public.blood_group, 'O+'::public.blood_group), COALESCE(%s, 15.0), TRUE)
+                        ON CONFLICT (user_id) DO UPDATE SET
+                            blood_group = COALESCE(EXCLUDED.blood_group, donors.blood_group),
+                            travel_radius_km = COALESCE(EXCLUDED.travel_radius_km, donors.travel_radius_km);
+                        """,
+                        (user_id, u.blood_group, u.travel_radius_km),
+                    )
+
+                # If coordinates provided, invoke PL/pgSQL upsert_user_location procedure
+                if u.latitude is not None and u.longitude is not None:
+                    cursor.execute(
+                        """
+                        CALL public.upsert_user_location(
+                            %s::UUID,
+                            %s::DOUBLE PRECISION,
+                            %s::DOUBLE PRECISION,
+                            %s::TEXT,
+                            'Primary',
+                            %s::TEXT,
+                            %s::DOUBLE PRECISION,
+                            TRUE
+                        );
+                        """,
+                        (
+                            user_id,
+                            u.latitude,
+                            u.longitude,
+                            u.location_name,
+                            u.location_source or "browser_gps",
+                            u.accuracy_meters,
+                        ),
+                    )
+
                 db.commit()
                 return (
                     {

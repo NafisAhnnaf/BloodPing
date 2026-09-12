@@ -28,6 +28,8 @@ export interface BloodRequest {
   hospital: string;
   address?: string;
   ward?: string;
+  hospitalLat?: number;
+  hospitalLng?: number;
   authorName: string;
   description: string;
   contact?: { phone: string; secondaryPhone?: string; email: string };
@@ -35,6 +37,8 @@ export interface BloodRequest {
   unitsFulfilled: number;
   unitsRequired: number;
   distance: number;
+  distanceKm?: number;
+  matchScore?: number;
   preferredDistance?: number;
   urgent: boolean;
   date: string;
@@ -62,6 +66,7 @@ interface AppDataContextType {
   currentUser: Donor;
   user: Donor | null;
   isAuthenticated: boolean;
+  fetchRequests: (coords?: { lat?: number; lng?: number; radius_km?: number }) => Promise<void>;
   login: (credentials: any, isDemo?: boolean) => Promise<void>;
   signup: (formData: any) => Promise<void>;
   logout: () => Promise<void>;
@@ -102,14 +107,21 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     }
   }, [session]);
 
-  const fetchRequests = async () => {
+  const fetchRequests = async (coords?: { lat?: number; lng?: number; radius_km?: number }) => {
     try {
-      const response = await apiClient.get('/requests/get-requests');
+      const params: Record<string, any> = {};
+      if (coords?.lat !== undefined && coords?.lat !== null) params.lat = coords.lat;
+      if (coords?.lng !== undefined && coords?.lng !== null) params.lng = coords.lng;
+      if (coords?.radius_km !== undefined) params.radius_km = coords.radius_km;
+
+      const response = await apiClient.get('/requests/feed', { params });
       if (response.data && response.data.success) {
         const dbRequests = response.data.payload.requests.map((req: any) => ({
           id: req.id,
           hospital: req.hospital_name,
           address: req.hospital_address,
+          hospitalLat: req.hospital_lat,
+          hospitalLng: req.hospital_lng,
           ward: '',
           authorName: req.recipient_name || 'Anonymous Recipient',
           description: req.notes || '',
@@ -120,7 +132,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
           bloodGroup: req.blood_group,
           unitsFulfilled: req.units_fulfilled || 0,
           unitsRequired: req.units_required || 1,
-          distance: req.distance || 0.0,
+          distance: req.distance_km ?? req.distance ?? 0.0,
+          distanceKm: req.distance_km ?? req.distance ?? 0.0,
+          matchScore: req.match_score ?? null,
           urgent: req.is_urgent || false,
           date: req.created_at,
           deadline: req.required_by,
@@ -258,8 +272,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         blood_group: reqData.bloodGroup,
         units_required: reqData.unitsRequired,
         hospital_name: reqData.hospital,
-        hospital_lat: 0.0,
-        hospital_lng: 0.0,
+        hospital_lat: reqData.hospitalLat ?? 23.8103,
+        hospital_lng: reqData.hospitalLng ?? 90.4125,
         hospital_address: reqData.address || 'Dhaka',
         search_radius_km: reqData.preferredDistance || 10.0,
         is_urgent: reqData.urgent || false,
@@ -411,7 +425,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   return (
     <AppDataContext.Provider value={{ 
-      requests, donors, currentUser, user, isAuthenticated, login, signup, logout, applyToRequest, createRequest, updateRequest, deleteRequest, updateApplicationStatus, cancelApplication, notifications, addNotification, markNotificationsRead
+      requests, donors, currentUser, user, isAuthenticated, fetchRequests, login, signup, logout, applyToRequest, createRequest, updateRequest, deleteRequest, updateApplicationStatus, cancelApplication, notifications, addNotification, markNotificationsRead
     }}>
       {children}
     </AppDataContext.Provider>

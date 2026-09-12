@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
-  MapPin, Search, AlertCircle, Heart, Filter, ChevronLeft, ChevronRight, X, Activity
+  MapPin, Search, AlertCircle, Heart, Filter, ChevronLeft, ChevronRight, X, Activity, Crosshair, Loader2, Navigation
 } from 'lucide-react';
 
 import { RangeSlider } from '../components/ui/RangeSlider';
@@ -11,24 +11,44 @@ import { CreateRequestModal } from '../components/ui/CreateRequestModal';
 import { BLOOD_GROUPS } from '../services/mockData';
 import { useRole } from '../context/RoleContext';
 import { useAppData } from '../context/AppDataContext';
+import { useGeolocation } from '../hooks/useGeolocation';
 import { Header } from '../components/layout/Header';
 
 export function FeedPage() {
   const [activeGroup, setActiveGroup] = useState('All');
   const { role } = useRole();
-  const { requests } = useAppData();
+  const { requests, fetchRequests } = useAppData();
+  const { requestLocation, loading: geoLoading } = useGeolocation();
+
+  const [liveCoords, setLiveCoords] = useState<{ lat: number; lng: number } | null>(null);
   
   // Search, Filter, Sort state
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilters, setShowFilters] = useState(false);
-  const [maxDistance, setMaxDistance] = useState<number>(20); // max 20km
+  const [maxDistance, setMaxDistance] = useState<number>(25); // default 25km per specification
   const [urgencyFilter, setUrgencyFilter] = useState<'all' | 'urgent' | 'open'>('all');
-  const [sortBy, setSortBy] = useState<'latest' | 'oldest' | 'abc'>('latest');
+  const [sortBy, setSortBy] = useState<'nearest' | 'urgent' | 'latest' | 'oldest' | 'abc'>('nearest');
   const [showCreateModal, setShowCreateModal] = useState(false);
   
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+
+  const handleEnableLiveGPS = async () => {
+    const pos = await requestLocation();
+    if (pos) {
+      setLiveCoords({ lat: pos.latitude, lng: pos.longitude });
+      await fetchRequests({ lat: pos.latitude, lng: pos.longitude, radius_km: maxDistance });
+    }
+  };
+
+  useEffect(() => {
+    fetchRequests({
+      lat: liveCoords?.lat,
+      lng: liveCoords?.lng,
+      radius_km: maxDistance,
+    });
+  }, [maxDistance]);
 
   const processedRequests = useMemo(() => {
     let result = [...requests];
@@ -53,6 +73,18 @@ export function FeedPage() {
 
     // Sorting
     result.sort((a, b) => {
+      if (sortBy === 'nearest') {
+        // Tier 1: Urgent requests within 25 km come first
+        const aUrgentClose = a.urgent && a.distance <= 25 ? 0 : 1;
+        const bUrgentClose = b.urgent && b.distance <= 25 ? 0 : 1;
+        if (aUrgentClose !== bUrgentClose) return aUrgentClose - bUrgentClose;
+        if (a.distance !== b.distance) return a.distance - b.distance;
+        return new Date(b.date).getTime() - new Date(a.date).getTime();
+      }
+      if (sortBy === 'urgent') {
+        if (a.urgent !== b.urgent) return a.urgent ? -1 : 1;
+        return a.distance - b.distance;
+      }
       if (sortBy === 'abc') return a.hospital.localeCompare(b.hospital);
       
       const dateA = new Date(a.date).getTime();
@@ -201,7 +233,9 @@ export function FeedPage() {
                      <SelectDropdown
                        value={sortBy}
                        onChange={(val) => setSortBy(val as any)}
-                       options={[
+                       options=[
+                         { label: 'Nearest First (Proximity)', value: 'nearest' },
+                         { label: 'Most Urgent First', value: 'urgent' },
                          { label: 'Latest First', value: 'latest' },
                          { label: 'Oldest First', value: 'oldest' },
                          { label: 'Alphabetical (A-Z)', value: 'abc' }
@@ -238,6 +272,36 @@ export function FeedPage() {
                ))}
              </div>
           </section>
+
+          {/* Geolocation Proximity Feed Banner */}
+          <div className="flex items-center justify-between bg-white/50 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-white/60 text-xs font-bold text-slate-700 shadow-sm">
+            <div className="flex items-center gap-2">
+              <Navigation size={15} className="text-red-600" />
+              <span>
+                {liveCoords
+                  ? `Live GPS Active (Within ${maxDistance} km)`
+                  : `Ranked by Proximity to Your Location (Within ${maxDistance} km)`}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={handleEnableLiveGPS}
+              disabled={geoLoading}
+              className="flex items-center gap-1.5 text-red-600 hover:text-red-700 font-extrabold text-[11px] bg-white/80 hover:bg-white px-3 py-1.5 rounded-xl border border-red-200 transition-all active:scale-95 shadow-xs disabled:opacity-50"
+            >
+              {geoLoading ? (
+                <>
+                  <Loader2 size={12} className="animate-spin" />
+                  Locating...
+                </>
+              ) : (
+                <>
+                  <Crosshair size={12} />
+                  {liveCoords ? 'Refresh GPS' : 'Use Live GPS'}
+                </>
+              )}
+            </button>
+          </div>
 
           {/* Vertical Feed Content */}
           <section className="flex flex-col gap-4">

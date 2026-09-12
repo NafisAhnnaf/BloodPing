@@ -1,3 +1,4 @@
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from app.core.auth import requireAuth
 from app.services.request_service import RequestService
@@ -8,6 +9,33 @@ from app.schemas.request_schema import (
 )
 
 router = APIRouter(prefix="/requests", tags=["Requests"])
+
+
+@router.get("/feed", response_model=StandardResponse)
+def get_feed(
+    lat: Optional[float] = None,
+    lng: Optional[float] = None,
+    radius_km: Optional[float] = None,
+    blood_group: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
+    user_id: str = Depends(requireAuth),
+):
+    """Retrieves proximity-ranked blood donation feed for the authenticated user."""
+    feed_list = RequestService.get_feed(
+        user_id=user_id,
+        lat=lat,
+        lng=lng,
+        radius_km=radius_km,
+        blood_group=blood_group,
+        limit=limit,
+        offset=offset,
+    )
+    return {
+        "success": True,
+        "message": "Personalized donation feed retrieved successfully.",
+        "payload": {"requests": feed_list},
+    }
 
 
 @router.get("/get-requests", response_model=StandardResponse)

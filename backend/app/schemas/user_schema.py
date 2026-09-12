@@ -21,4 +21,6 @@ class UserDetails(BaseModel):
     location_name: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+    location_source: Optional[str] = "browser_gps"
+    accuracy_meters: Optional[float] = None
     role: Optional[str] = None

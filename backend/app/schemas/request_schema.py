@@ -49,6 +49,26 @@ class BloodRequestItem(BaseModel):
     recipient_name: Optional[str] = None
     recipient_phone: Optional[str] = None
 
+class FeedRequestItem(BaseModel):
+    id: str
+    blood_group: str
+    units_required: int
+    units_fulfilled: int
+    hospital_name: str
+    hospital_lat: Optional[float] = None
+    hospital_lng: Optional[float] = None
+    hospital_address: Optional[str] = None
+    search_radius_km: float = 10.0
+    is_urgent: bool = False
+    notes: Optional[str] = None
+    required_by: Optional[str] = None
+    status: str
+    created_at: Optional[str] = None
+    recipient_name: Optional[str] = None
+    recipient_phone: Optional[str] = None
+    distance_km: float = 0.0
+    match_score: Optional[float] = None
+
 class RequestStatusSummary(BaseModel):
     request_status: str
     units_required: int

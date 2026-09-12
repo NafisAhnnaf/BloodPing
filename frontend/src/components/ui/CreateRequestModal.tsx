@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Calendar as CalendarIcon } from 'lucide-react';
+import { X, Calendar as CalendarIcon, Crosshair, Loader2, CheckCircle2, MapPin } from 'lucide-react';
 import { BloodRequest, useAppData } from '../../context/AppDataContext';
 import { BLOOD_GROUPS } from '../../services/mockData';
 import { SelectDropdown } from './SelectDropdown';
 import { DatePicker } from './DatePicker';
+import { useGeolocation } from '../../hooks/useGeolocation';
+import { geocodingService, GeocodingResult } from '../../services/geocodingService';
 
 interface CreateRequestModalProps {
   onClose: () => void;
@@ -12,6 +14,7 @@ interface CreateRequestModalProps {
 
 export function CreateRequestModal({ onClose }: CreateRequestModalProps) {
   const { createRequest } = useAppData();
+  const { requestLocation, loading: geoLoading } = useGeolocation();
   
   const [form, setForm] = useState<Partial<BloodRequest>>({
     hospital: '',
@@ -23,9 +26,50 @@ export function CreateRequestModal({ onClose }: CreateRequestModalProps) {
     preferredDistance: 15,
     contact: { phone: '', secondaryPhone: '', email: '' }
   });
+
+  const [coords, setCoords] = useState<{ latitude: number | null; longitude: number | null }>({
+    latitude: null,
+    longitude: null
+  });
+  const [isResolving, setIsResolving] = useState(false);
+  const [addressResults, setAddressResults] = useState<GeocodingResult[]>([]);
+  const [isSearchingAddress, setIsSearchingAddress] = useState(false);
   
   const [unitsInput, setUnitsInput] = useState<string>('1');
   const [deadline, setDeadline] = useState<string>('');
+
+  const handleUseMyGPS = async () => {
+    setIsResolving(true);
+    const pos = await requestLocation();
+    if (pos) {
+      setCoords({ latitude: pos.latitude, longitude: pos.longitude });
+      const addressName = await geocodingService.reverseGeocode(pos.latitude, pos.longitude);
+      setForm(prev => ({
+        ...prev,
+        address: addressName,
+        hospital: prev.hospital || `Clinic/Hospital near ${addressName}`
+      }));
+    }
+    setIsResolving(false);
+  };
+
+  const handleAddressSearch = async (val: string) => {
+    setForm(prev => ({ ...prev, address: val }));
+    if (val.trim().length >= 3) {
+      setIsSearchingAddress(true);
+      const res = await geocodingService.searchAddress(val);
+      setAddressResults(res);
+      setIsSearchingAddress(false);
+    } else {
+      setAddressResults([]);
+    }
+  };
+
+  const selectAddress = (item: GeocodingResult) => {
+    setCoords({ latitude: item.latitude, longitude: item.longitude });
+    setForm(prev => ({ ...prev, address: item.displayName }));
+    setAddressResults([]);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,13 +80,15 @@ export function CreateRequestModal({ onClose }: CreateRequestModalProps) {
       unitsRequired: isNaN(parsedUnits) || parsedUnits < 1 ? 1 : parsedUnits,
       urgent: form.urgent || false,
       address: form.address,
+      hospitalLat: coords.latitude ?? 23.8103,
+      hospitalLng: coords.longitude ?? 90.4125,
       ward: form.ward,
       description: form.description || '',
-      preferredDistance: form.preferredDistance || 5,
+      preferredDistance: form.preferredDistance || 15,
       contact: form.contact as any,
       deadline: deadline || new Date(Date.now() + 86400000).toISOString(),
       authorName: 'Current User', // Mocked user
-      distance: 0, // Initial distance mocked
+      distance: 0,
     });
     onClose();
   };
@@ -101,24 +147,71 @@ export function CreateRequestModal({ onClose }: CreateRequestModalProps) {
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Hospital / Clinic Name</label>
+            <div className="flex justify-between items-center mb-1">
+              <label className="block text-xs font-bold text-slate-500 uppercase">Hospital / Clinic Name</label>
+              <button
+                type="button"
+                onClick={handleUseMyGPS}
+                disabled={geoLoading || isResolving}
+                className="text-xs font-bold text-red-600 hover:text-red-700 flex items-center gap-1 transition-colors disabled:opacity-50"
+              >
+                {geoLoading || isResolving ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Detecting GPS...
+                  </>
+                ) : (
+                  <>
+                    <Crosshair className="h-3.5 w-3.5" />
+                    Use Current GPS
+                  </>
+                )}
+              </button>
+            </div>
             <input 
               type="text" value={form.hospital} 
               onChange={e => setForm({ ...form, hospital: e.target.value })}
+              placeholder="e.g. Dhaka Medical College Hospital"
               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold focus:ring-2 focus:ring-red-500/30"
               required
             />
+            {coords.latitude && coords.longitude && (
+              <p className="text-[11px] text-emerald-700 font-semibold mt-1 flex items-center gap-1">
+                <CheckCircle2 className="h-3 w-3 inline" />
+                Target GPS: {coords.latitude.toFixed(4)}, {coords.longitude.toFixed(4)}
+              </p>
+            )}
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
+          <div className="grid grid-cols-2 gap-3 relative">
+            <div className="relative">
               <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Full Address (City/Street)</label>
               <input 
                 type="text" value={form.address} 
-                onChange={e => setForm({ ...form, address: e.target.value })}
+                onChange={e => handleAddressSearch(e.target.value)}
+                placeholder="Search hospital street or city..."
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold focus:ring-2 focus:ring-red-500/30"
                 required
               />
+              {isSearchingAddress && (
+                <div className="absolute right-3 top-8">
+                  <Loader2 className="h-4 w-4 text-slate-400 animate-spin" />
+                </div>
+              )}
+              {addressResults.length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-40 overflow-y-auto z-50 divide-y divide-slate-100">
+                  {addressResults.map((item, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => selectAddress(item)}
+                      className="w-full text-left px-3 py-2 text-xs font-medium text-slate-800 hover:bg-rose-50 transition-colors"
+                    >
+                      <p className="truncate font-semibold">{item.displayName}</p>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <div>
               <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Ward / Room / Floor</label>

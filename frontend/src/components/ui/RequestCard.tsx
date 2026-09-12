@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Heart, MapPin, Clock, Activity, Users, Settings } from 'lucide-react';
+import { Heart, MapPin, Clock, Activity, Users, Settings, Navigation } from 'lucide-react';
 import { BloodRequest, useAppData } from '../../context/AppDataContext';
 import { useRole } from '../../context/RoleContext';
 import { RequestDetailsModal } from './RequestDetailsModal';
@@ -119,9 +119,9 @@ export function RequestCard({ request }: RequestCardProps) {
            <MapPin size={14} className="text-red-500 flex-shrink-0" />
            <span className="truncate">{request.hospital}</span>
          </div>
-         <div className="flex items-center gap-1.5">
-           <Activity size={14} className="text-red-400 flex-shrink-0" />
-           <span>{request.distance} km</span>
+         <div className="flex items-center gap-1.5 text-rose-700 bg-rose-50/80 px-2 py-0.5 rounded-lg border border-rose-200/60">
+           <Navigation size={13} className="text-red-600 flex-shrink-0" />
+           <span>{request.distance ? `${Number(request.distance).toFixed(1)} km away` : 'Nearby'}</span>
          </div>
          <div className="flex items-center gap-1.5">
            <Clock size={14} className="text-amber-500 flex-shrink-0" />

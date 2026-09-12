@@ -31,9 +31,38 @@ export interface BloodRequestResponse {
   created_at?: string | null;
   recipient_name?: string | null;
   recipient_phone?: string | null;
+  distance?: number;
+  distance_km?: number;
+  match_score?: number | null;
 }
 
 export const requestService = {
+  /**
+   * Fetch proximity-ranked feed requests based on viewer coordinates.
+   */
+  async getFeed(params?: {
+    lat?: number | null;
+    lng?: number | null;
+    radius_km?: number;
+    blood_group?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<BloodRequestResponse[]> {
+    const cleanParams: Record<string, any> = {};
+    if (params?.lat !== undefined && params?.lat !== null) cleanParams.lat = params.lat;
+    if (params?.lng !== undefined && params?.lng !== null) cleanParams.lng = params.lng;
+    if (params?.radius_km !== undefined) cleanParams.radius_km = params.radius_km;
+    if (params?.blood_group && params?.blood_group !== 'All') cleanParams.blood_group = params.blood_group;
+    if (params?.limit) cleanParams.limit = params.limit;
+    if (params?.offset) cleanParams.offset = params.offset;
+
+    const res = await apiClient.get('/requests/feed', { params: cleanParams });
+    if (res.data && res.data.success) {
+      return res.data.payload.requests || [];
+    }
+    return [];
+  },
+
   /**
    * Fetch all donation requests for the feed.
    */
