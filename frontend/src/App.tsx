@@ -15,6 +15,7 @@ import { ProtectedRoute, GuestRoute } from './components/layout/RouteProtection'
 import { SetupProfilePage } from './pages/SetupProfilePage';
 import { AdminLogin } from './pages/admin/AdminLogin';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
+import { Suspended } from './pages/Suspended';
 
 function AppLayout() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -30,19 +31,21 @@ function AppLayout() {
   }
 
   const isAdminPage = location.pathname.startsWith('/admin');
-  const isAuthPage = location.pathname === '/login' || location.pathname === '/signup' || location.pathname === '/' || isAdminPage;
+  const isSuspendedPage = location.pathname === '/suspended';
+  const isAuthPage = location.pathname === '/login' || location.pathname === '/signup' || location.pathname === '/' || isSuspendedPage || isAdminPage;
 
   const bgClass = isAuthPage
-    ? "" // Let Auth/Admin pages handle their own background
+    ? "" // Let Auth/Admin/Suspended pages handle their own background
     : "pb-24 md:pb-0 min-h-screen bg-gradient-to-br from-yellow-100 to-red-200 text-slate-900 antialiased";
 
   return (
     <div className={bgClass}>
       <Routes>
-        {/* Guest Routes */}
+        {/* Guest & Special Routes */}
         <Route path="/" element={<GuestRoute><LandingPage /></GuestRoute>} />
         <Route path="/login" element={<GuestRoute><AuthPage /></GuestRoute>} />
         <Route path="/signup" element={<GuestRoute><AuthPage /></GuestRoute>} />
+        <Route path="/suspended" element={<Suspended />} />
 
         {/* Admin Routes */}
         <Route path="/admin/login" element={<AdminLogin />} />
@@ -60,7 +63,7 @@ function AppLayout() {
         {/* Fallback */}
         <Route path="*" element={<Navigate to={isAuthenticated ? "/feed" : "/"} replace />} />
       </Routes>
-      {isAuthenticated && !isAdminPage && <BottomNav />}
+      {isAuthenticated && !isAdminPage && !isSuspendedPage && <BottomNav />}
     </div>
   );
 }
