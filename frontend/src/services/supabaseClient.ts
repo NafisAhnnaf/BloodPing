@@ -48,13 +48,17 @@ const trackingFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
 };
 
 // Create and export the Supabase client instance with the tracking fetch
-export const supabase = createClient(supabaseUrl || '', supabaseAnonKey || '', {
-  global: {
-    fetch: trackingFetch,
-  },
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
+export const supabase = createClient(
+  supabaseUrl || 'https://placeholder.supabase.co', 
+  supabaseAnonKey || 'placeholder-key', 
+  {
+    global: {
+      fetch: trackingFetch,
+    },
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+    }
   }
-});
+);
 

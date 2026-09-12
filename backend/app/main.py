@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.database import init_db_pool, db_pool
 from app.middlewares.auth_middleware import JWTAuthMiddleware
-from app.routers import user_router, donor_router, recipient_router, admin_router, request_router, match_router
+from app.routers import user_router, donor_router, recipient_router, admin_router, request_router, match_router, leaderboard_router
 
 import importlib.util
 
@@ -67,6 +67,7 @@ app.include_router(recipient_router.router)
 app.include_router(admin_router.router)
 app.include_router(request_router.router)
 app.include_router(match_router.router)
+app.include_router(leaderboard_router.router)
 
 
 @app.get("/")
