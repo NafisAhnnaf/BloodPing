@@ -1,2 +1,33 @@
 .env
 .venv/
+# Python caches
+**/__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+/backend/bloodping_backend.egg-info/
+/build
+/backend/build
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Antigravity Agent/Skill folders and lockfiles
+.agents/
+skills-lock.json
+
+# IDE / Editor configuration
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.DS_Store
+
+# Node / Frontend directories
+node_modules/
+dist/
+dist-ssr/
