@@ -13,10 +13,10 @@ interface HeaderProps {
   notificationPulse?: boolean;
 }
 
-export function Header({ 
-  title = 'BloodPing', 
-  showBack = false, 
-  onBack, 
+export function Header({
+  title = 'BloodPing',
+  showBack = false,
+  onBack,
   showLogo = true,
   showNotification = true
 }: HeaderProps) {
@@ -24,7 +24,7 @@ export function Header({
   const currentPath = location.pathname;
   const { role, setRole, systemRole } = useRole();
   const { notifications, markNotificationsRead } = useAppData();
-  
+
   const hasUnread = notifications.some(n => !n.read);
   const [showInbox, setShowInbox] = useState(false);
   const inboxRef = useRef<HTMLDivElement>(null);
@@ -45,12 +45,12 @@ export function Header({
     }
     setShowInbox(!showInbox);
   };
-  
+
   const navLinks = [
     { name: 'Feed', path: '/feed' },
     { name: 'Leaderboard', path: '/leaderboard' },
     { name: 'History', path: '/history' },
-    { name: 'Profile', path: '/profile' }
+    // { name: 'Profile', path: '/profile' }
   ];
 
   if (systemRole === 'admin') {
@@ -59,12 +59,12 @@ export function Header({
 
   return (
     <header className="sticky top-0 z-50 w-full bg-white/20 backdrop-blur-lg border-b border-white/30 min-h-16 flex flex-col md:flex-row items-center justify-between px-4 md:px-8 py-2 md:py-0 shadow-sm gap-3 md:gap-0">
-      
+
       {/* LEFT: Logo & Back Button */}
       <div className="flex items-center w-full md:w-auto">
         {showBack && (
-          <button 
-            onClick={onBack} 
+          <button
+            onClick={onBack}
             className="w-10 h-10 flex items-center justify-center rounded-full bg-white/50 hover:bg-white/80 transition-colors shadow-sm mr-3"
           >
             <ArrowLeft size={20} className="text-red-900" />
@@ -89,14 +89,13 @@ export function Header({
       {/* CENTER: Desktop Nav */}
       <nav className="hidden md:flex flex-1 justify-center items-center gap-4 text-sm font-semibold">
         {navLinks.map((link) => (
-          <Link 
-            key={link.name} 
+          <Link
+            key={link.name}
             to={link.path}
-            className={`px-5 py-2 rounded-full transition-all border ${
-              currentPath === link.path 
-                ? 'bg-white/80 text-red-700 border-white/60 shadow-sm' 
-                : 'bg-white/30 text-slate-700 border-transparent hover:bg-white/60 hover:text-slate-900'
-            }`}
+            className={`px-5 py-2 rounded-full transition-all border ${currentPath === link.path
+              ? 'bg-white/80 text-red-700 border-white/60 shadow-sm'
+              : 'bg-white/30 text-slate-700 border-transparent hover:bg-white/60 hover:text-slate-900'
+              }`}
           >
             {link.name}
           </Link>
@@ -106,19 +105,17 @@ export function Header({
       {/* RIGHT: Role Toggle & Notifications */}
       <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end">
         <div className="flex items-center gap-1 bg-white/50 backdrop-blur-md border border-white/60 p-1 rounded-full shadow-sm">
-          <button 
+          <button
             onClick={() => setRole('donor')}
-            className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
-              role === 'donor' ? 'bg-red-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-900'
-            }`}
+            className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${role === 'donor' ? 'bg-red-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-900'
+              }`}
           >
             Donor
           </button>
-          <button 
+          <button
             onClick={() => setRole('recipient')}
-            className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
-              role === 'recipient' ? 'bg-red-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-900'
-            }`}
+            className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${role === 'recipient' ? 'bg-red-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-900'
+              }`}
           >
             Recipient
           </button>
@@ -126,7 +123,7 @@ export function Header({
 
         {showNotification && (
           <div className="relative" ref={inboxRef}>
-            <button 
+            <button
               onClick={handleToggleInbox}
               className="w-10 h-10 flex items-center justify-center rounded-full bg-white/30 hover:bg-white/50 transition-colors shadow-sm relative"
             >
@@ -162,6 +159,13 @@ export function Header({
             )}
           </div>
         )}
+        <div>
+          <button
+            className="w-10 h-10 flex items-center justify-center rounded-full bg-white/30 hover:bg-white/50 transition-colors shadow-sm relative"
+          >
+            <Link to={"/profile"}><User size={20} className="text-red-900" /></Link>
+          </button>
+        </div>
       </div>
     </header>
   );
