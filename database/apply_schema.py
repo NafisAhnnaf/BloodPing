@@ -65,7 +65,7 @@ def main():
     sql_files.extend(base_funcs)
     
     # 2. Subdirectory functions
-    subdirs = ['donations', 'matches', 'requests', 'stats']
+    subdirs = ['donations', 'matches', 'requests', 'stats', 'points']
     for sd in subdirs:
         sd_path = os.path.join(functions_dir, sd)
         if os.path.isdir(sd_path):
