@@ -8,12 +8,71 @@ from app.schemas.request_schema import BloodRequestCreate, BloodRequestUpdate
 logger = logging.getLogger(__name__)
 
 
-def _format_request_row(row: Dict[str, Any], current_user_id: Optional[str] = None) -> Dict[str, Any]:
+def _fetch_matches_by_requests(cursor, request_ids: List[str]) -> Dict[str, List[Dict[str, Any]]]:
+    if not request_ids:
+        return {}
+    try:
+        cursor.execute(
+            """
+            SELECT 
+                m.id AS match_id,
+                m.request_id,
+                m.donor_id,
+                m.status AS match_status,
+                m.recipient_verification_note,
+                m.applied_at,
+                m.accepted_at,
+                m.confirmed_at,
+                d.user_id AS donor_user_id,
+                p.full_name AS donor_name,
+                d.blood_group AS donor_blood_group,
+                p.phone AS donor_phone
+            FROM public.donation_matches m
+            JOIN public.donors d ON m.donor_id = d.id
+            JOIN public.profiles p ON d.user_id = p.id
+            WHERE m.request_id = ANY(%s::uuid[]);
+            """,
+            (request_ids,)
+        )
+        rows = cursor.fetchall()
+        matches_by_req: Dict[str, List[Dict[str, Any]]] = {}
+        for r in rows:
+            req_id_str = str(r["request_id"])
+            if req_id_str not in matches_by_req:
+                matches_by_req[req_id_str] = []
+            matches_by_req[req_id_str].append({
+                "id": str(r["match_id"]),
+                "matchId": str(r["match_id"]),
+                "donorId": str(r["donor_user_id"]),
+                "donorUserId": str(r["donor_user_id"]),
+                "donorProfileId": str(r["donor_id"]),
+                "donorName": r["donor_name"],
+                "donorPhone": r["donor_phone"],
+                "bloodGroup": r["donor_blood_group"],
+                "status": str(r["match_status"]),
+                "recipient_verification_note": r["recipient_verification_note"],
+                "appliedAt": r["applied_at"].isoformat() if r["applied_at"] else None,
+                "acceptedAt": r["accepted_at"].isoformat() if r["accepted_at"] else None,
+                "confirmedAt": r["confirmed_at"].isoformat() if r["confirmed_at"] else None,
+            })
+        return matches_by_req
+    except Exception as e:
+        logger.warning(f"Failed to fetch matches for requests: {e}")
+        return {}
+
+
+def _format_request_row(
+    row: Dict[str, Any], 
+    current_user_id: Optional[str] = None,
+    matches_by_request: Optional[Dict[str, List[Dict[str, Any]]]] = None
+) -> Dict[str, Any]:
     req_id = row.get("request_id") or row.get("id")
+    req_id_str = str(req_id)
     recipient_user_id = str(row["recipient_user_id"]) if "recipient_user_id" in row and row["recipient_user_id"] else None
     is_owner = bool(current_user_id and recipient_user_id and str(current_user_id) == str(recipient_user_id))
+    applications = matches_by_request.get(req_id_str, []) if matches_by_request else []
     return {
-        "id": str(req_id),
+        "id": req_id_str,
         "recipient_id": str(row["recipient_id"]) if "recipient_id" in row and row["recipient_id"] else None,
         "recipient_user_id": recipient_user_id,
         "owner_id": recipient_user_id,
@@ -33,6 +92,8 @@ def _format_request_row(row: Dict[str, Any], current_user_id: Optional[str] = No
         "created_at": row["created_at"].isoformat() if row.get("created_at") else None,
         "recipient_name": row.get("recipient_name"),
         "recipient_phone": row.get("recipient_phone"),
+        "applicants": len(applications),
+        "applications": applications,
     }
 
 
@@ -124,7 +185,9 @@ class RequestService:
                         """
                     )
                     rows = cursor.fetchall()
-                    return [_format_request_row(r, current_user_id) for r in rows]
+                    req_ids = [str(r.get("request_id") or r.get("id")) for r in rows if r]
+                    matches = _fetch_matches_by_requests(cursor, req_ids)
+                    return [_format_request_row(r, current_user_id, matches) for r in rows]
                 except Exception as e:
                     logger.error(f"Error fetching all requests: {e}")
                     raise HTTPException(
@@ -150,7 +213,9 @@ class RequestService:
                         """
                     )
                     rows = cursor.fetchall()
-                    return [_format_request_row(r, current_user_id) for r in rows]
+                    req_ids = [str(r.get("request_id") or r.get("id")) for r in rows if r]
+                    matches = _fetch_matches_by_requests(cursor, req_ids)
+                    return [_format_request_row(r, current_user_id, matches) for r in rows]
                 except Exception as e:
                     err_msg = str(e)
                     if "No active requests found" in err_msg:
@@ -180,7 +245,9 @@ class RequestService:
                         (user_id,)
                     )
                     rows = cursor.fetchall()
-                    return [_format_request_row(r, user_id) for r in rows]
+                    req_ids = [str(r.get("request_id") or r.get("id")) for r in rows if r]
+                    matches = _fetch_matches_by_requests(cursor, req_ids)
+                    return [_format_request_row(r, user_id, matches) for r in rows]
                 except Exception as e:
                     err_msg = str(e)
                     if "No requests found for user" in err_msg:
@@ -215,7 +282,8 @@ class RequestService:
                             status_code=status.HTTP_404_NOT_FOUND,
                             detail="Donation request not found."
                         )
-                    return _format_request_row(row, current_user_id)
+                    matches = _fetch_matches_by_requests(cursor, [request_id])
+                    return _format_request_row(row, current_user_id, matches)
                 except HTTPException:
                     raise
                 except Exception as e:
