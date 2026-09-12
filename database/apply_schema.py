@@ -40,13 +40,29 @@ def main():
     except Exception as e:
         print(f"Skipping auth schema/users table creation (likely already exists): {e}")
     
-    # Run DDL
+    # 1. Run Migrations
+    migrations_dir = os.path.join(os.path.dirname(__file__), 'migrations')
+    if os.path.isdir(migrations_dir):
+        mig_files = [os.path.join(migrations_dir, f) for f in os.listdir(migrations_dir) if f.endswith('.sql')]
+        mig_files.sort()
+        for mig in mig_files:
+            print(f"Applying migration: {os.path.basename(mig)}...")
+            with open(mig, 'r') as f:
+                mig_sql = f.read()
+            try:
+                cur.execute(mig_sql)
+            except Exception as e:
+                print(f"Notice applying migration {os.path.basename(mig)}: {e}")
+
+    # 2. Run DDL
     ddl_path = os.path.join(os.path.dirname(__file__), 'ddl/ddl.sql')
     print(f"Running DDL from {ddl_path}...")
     with open(ddl_path, 'r') as f:
         ddl_sql = f.read()
-    # Execute DDL
-    cur.execute(ddl_sql)
+    try:
+        cur.execute(ddl_sql)
+    except Exception as e:
+        print(f"Notice running DDL (tables/types likely already created): {e}")
     
     # Collect functions
     functions_dir = os.path.join(os.path.dirname(__file__), 'plpgsql/functions')
@@ -94,6 +110,7 @@ def main():
         trigs.sort(key=lambda x: os.path.basename(x))
         sql_files.extend(trigs)
     
+    import re
     # Run all SQL files
     for sql_file in sql_files:
         print(f"Applying {os.path.relpath(sql_file, start=os.path.dirname(__file__))}...")
@@ -102,8 +119,19 @@ def main():
         try:
             cur.execute(sql_content)
         except Exception as e:
-            print(f"Error applying {sql_file}: {e}")
-            raise e
+            if "cannot change return type" in str(e).lower():
+                match = re.search(r'CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+public\.(\w+)', sql_content, re.IGNORECASE)
+                if match:
+                    func_name = match.group(1)
+                    print(f"Dropping existing function public.{func_name} to update return type...")
+                    cur.execute(f"DROP FUNCTION IF EXISTS public.{func_name} CASCADE;")
+                    cur.execute(sql_content)
+                else:
+                    print(f"Error applying {sql_file}: {e}")
+                    raise e
+            else:
+                print(f"Error applying {sql_file}: {e}")
+                raise e
             
     print("Database schema and all functions/procedures applied successfully!")
     cur.close()
