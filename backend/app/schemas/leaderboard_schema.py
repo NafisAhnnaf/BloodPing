@@ -11,6 +11,8 @@ class LeaderboardEntry(BaseModel):
     total_donations: int
     current_streak: int
     longest_streak: int
+    total_points: Optional[int] = 0
+    badge: Optional[str] = None
     last_donation_at: Optional[str] = None
     rank_overall: int
     rank_by_blood_group: Optional[int] = None
@@ -24,6 +26,8 @@ class DonorRankResponse(BaseModel):
     total_donations: int
     current_streak: int
     longest_streak: int
+    total_points: Optional[int] = 0
+    badge: Optional[str] = None
     last_donation_at: Optional[str] = None
     rank_overall: int
     rank_by_blood_group: Optional[int] = None
