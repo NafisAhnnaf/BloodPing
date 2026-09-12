@@ -15,13 +15,21 @@ const apiClient = axios.create({
   },
 });
 
-// Interceptor to automatically attach JWT Bearer token from the Zustand auth store
+// Interceptor to automatically attach JWT Bearer token from the Zustand auth store or admin token
 apiClient.interceptors.request.use(
   (config) => {
-    const session = useAuthStore.getState().session;
-    if (session?.access_token) {
-      config.headers.Authorization = `Bearer ${session.access_token}`;
+    const adminToken = localStorage.getItem('admin_token');
+    const userToken = useAuthStore.getState().session?.access_token;
+
+    // Attach admin token for admin routes, or user token for general routes
+    if (config.url?.startsWith('/admins') && adminToken) {
+      config.headers.Authorization = `Bearer ${adminToken}`;
+    } else if (userToken) {
+      config.headers.Authorization = `Bearer ${userToken}`;
+    } else if (adminToken) {
+      config.headers.Authorization = `Bearer ${adminToken}`;
     }
+
     console.log(`[HTTP Request] ${config.method?.toUpperCase()} ${config.url}`, config.data || '');
     return config;
   },
@@ -54,12 +62,17 @@ apiClient.interceptors.response.use(
     }
 
     if (error.response?.status === 401) {
-      // Clear token and session if backend rejects the credentials
-      useAuthStore.getState().clearSession();
-      // Revoke the session on Supabase auth client as well
-      supabase.auth.signOut().catch((err) => {
-        console.error('Failed to revoke session on Supabase during 401 logout:', err);
-      });
+      if (error.config?.url?.startsWith('/admins')) {
+        localStorage.removeItem('admin_token');
+        localStorage.removeItem('admin_user');
+      } else {
+        // Clear token and session if backend rejects the credentials
+        useAuthStore.getState().clearSession();
+        // Revoke the session on Supabase auth client as well
+        supabase.auth.signOut().catch((err) => {
+          console.error('Failed to revoke session on Supabase during 401 logout:', err);
+        });
+      }
     }
     return Promise.reject(error);
   }
