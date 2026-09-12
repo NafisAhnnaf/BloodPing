@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Calendar as CalendarIcon } from 'lucide-react';
+import { X, Calendar as CalendarIcon, AlertTriangle } from 'lucide-react';
 import { BloodRequest, useAppData } from '../../context/AppDataContext';
 import { BLOOD_GROUPS } from '../../services/mockData';
 import { SelectDropdown } from './SelectDropdown';
@@ -13,6 +13,9 @@ interface CreateRequestModalProps {
 export function CreateRequestModal({ onClose }: CreateRequestModalProps) {
   const { createRequest } = useAppData();
   
+  const now = new Date();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
   const [form, setForm] = useState<Partial<BloodRequest>>({
     hospital: '',
     bloodGroup: 'A+',
@@ -25,26 +28,57 @@ export function CreateRequestModal({ onClose }: CreateRequestModalProps) {
   });
   
   const [unitsInput, setUnitsInput] = useState<string>('1');
-  const [deadline, setDeadline] = useState<string>('');
+  const [deadline, setDeadline] = useState<string>(todayStr);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMessage(null);
+
+    if (deadline && deadline < todayStr) {
+      setErrorMessage("Required by date cannot be in the past. Please select today or a future date.");
+      return;
+    }
+
     const parsedUnits = parseInt(unitsInput);
-    createRequest({
-      hospital: form.hospital || '',
-      bloodGroup: form.bloodGroup || 'A+',
-      unitsRequired: isNaN(parsedUnits) || parsedUnits < 1 ? 1 : parsedUnits,
-      urgent: form.urgent || false,
-      address: form.address,
-      ward: form.ward,
-      description: form.description || '',
-      preferredDistance: form.preferredDistance || 5,
-      contact: form.contact as any,
-      deadline: deadline || new Date(Date.now() + 86400000).toISOString(),
-      authorName: 'Current User', // Mocked user
-      distance: 0, // Initial distance mocked
-    });
-    onClose();
+    const deadlineIso = deadline 
+      ? (deadline.includes('T') ? deadline : new Date(`${deadline}T23:59:59`).toISOString())
+      : new Date(`${todayStr}T23:59:59`).toISOString();
+
+    try {
+      setIsSubmitting(true);
+      await createRequest({
+        hospital: form.hospital || '',
+        bloodGroup: form.bloodGroup || 'A+',
+        unitsRequired: isNaN(parsedUnits) || parsedUnits < 1 ? 1 : parsedUnits,
+        urgent: form.urgent || false,
+        address: form.address,
+        ward: form.ward,
+        description: form.description || '',
+        preferredDistance: form.preferredDistance || 5,
+        contact: form.contact as any,
+        deadline: deadlineIso,
+        authorName: 'Current User', // Mocked user
+        distance: 0, // Initial distance mocked
+      });
+      onClose();
+    } catch (err: any) {
+      let msg = 'Failed to create donation request.';
+      if (err.response?.data?.detail) {
+        const detail = err.response.data.detail;
+        if (typeof detail === 'string') {
+          msg = detail;
+        } else if (Array.isArray(detail) && detail.length > 0) {
+          msg = detail.map((d: any) => d.msg || JSON.stringify(d)).join(', ');
+        }
+      } else if (err.message) {
+        msg = err.message;
+      }
+      setErrorMessage(msg);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   useEffect(() => {
@@ -70,6 +104,13 @@ export function CreateRequestModal({ onClose }: CreateRequestModalProps) {
             <X size={20} />
           </button>
         </div>
+
+        {errorMessage && (
+          <div className="mb-4 p-3 bg-red-100 border border-red-200 text-red-700 text-xs font-bold rounded-xl flex items-center gap-2">
+            <AlertTriangle size={16} className="flex-shrink-0" />
+            <span>{errorMessage}</span>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="flex-1 space-y-4">
           <div className="grid grid-cols-2 gap-3">
@@ -97,6 +138,8 @@ export function CreateRequestModal({ onClose }: CreateRequestModalProps) {
             <DatePicker 
               value={deadline}
               onChange={setDeadline}
+              minDate={todayStr}
+              disablePast={true}
             />
           </div>
 
@@ -214,15 +257,17 @@ export function CreateRequestModal({ onClose }: CreateRequestModalProps) {
             <button 
               type="button"
               onClick={onClose}
-              className="flex-1 py-3 rounded-xl font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors"
+              disabled={isSubmitting}
+              className="flex-1 py-3 rounded-xl font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors disabled:opacity-50"
             >
               Cancel
             </button>
             <button 
               type="submit"
-              className="flex-1 py-3 rounded-xl font-bold text-white bg-red-600 hover:bg-red-700 transition-colors shadow-md"
+              disabled={isSubmitting}
+              className="flex-1 py-3 rounded-xl font-bold text-white bg-red-600 hover:bg-red-700 transition-colors shadow-md disabled:opacity-50"
             >
-              Create Request
+              {isSubmitting ? 'Creating...' : 'Create Request'}
             </button>
           </div>
         </form>

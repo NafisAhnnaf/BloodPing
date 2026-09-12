@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Heart, MapPin, Clock, Activity, Users, Settings } from 'lucide-react';
 import { BloodRequest, useAppData } from '../../context/AppDataContext';
 import { useRole } from '../../context/RoleContext';
+import { useAuthStore } from '../../stores/authStore';
 import { RequestDetailsModal } from './RequestDetailsModal';
 import { ManageRequestModal } from './ManageRequestModal';
 
@@ -10,10 +12,20 @@ interface RequestCardProps {
 }
 
 export function RequestCard({ request }: RequestCardProps) {
+  const navigate = useNavigate();
   const { currentUser } = useAppData();
-  const { role } = useRole();
+  const { role, isDonorApproved } = useRole();
+  const authUser = useAuthStore(state => state.session?.user);
   const [showDetails, setShowDetails] = useState(false);
   const [showManage, setShowManage] = useState(false);
+
+  const isOwner = Boolean(
+    request.isOwner ?? 
+    (authUser && (
+      (request.recipientUserId && String(request.recipientUserId) === String(authUser.id)) || 
+      (request.ownerId && String(request.ownerId) === String(authUser.id))
+    ))
+  );
 
   useEffect(() => {
     setShowDetails(false);
@@ -136,9 +148,22 @@ export function RequestCard({ request }: RequestCardProps) {
           <span>{request.applications.length} Donors Applied</span>
         </div>
         
-        {role === 'donor' ? (
+        {isOwner ? (
           <button 
-            onClick={() => setShowDetails(true)}
+            onClick={() => setShowManage(true)}
+            className="flex items-center gap-2 px-6 py-2.5 rounded-2xl text-sm font-extrabold transition-all shadow-md active:scale-95 bg-slate-800 text-white hover:bg-slate-900"
+          >
+            <Settings size={16} /> Manage
+          </button>
+        ) : (
+          <button 
+            onClick={() => {
+              if (!isDonorApproved && !hasApplied) {
+                navigate('/become-donor', { state: { returnToRequestId: request.id } });
+              } else {
+                setShowDetails(true);
+              }
+            }}
             disabled={request.status === 'completed'}
             className={`flex items-center gap-2 px-6 py-2.5 rounded-2xl text-sm font-extrabold transition-all shadow-md active:scale-95 ${
               request.status === 'completed'
@@ -155,22 +180,15 @@ export function RequestCard({ request }: RequestCardProps) {
             ) : (
               <>
                 <Heart size={16} className="fill-white" />
-                View
+                Apply
               </>
             )}
-          </button>
-        ) : (
-          <button 
-            onClick={() => setShowManage(true)}
-            className="flex items-center gap-2 px-6 py-2.5 rounded-2xl text-sm font-extrabold transition-all shadow-md active:scale-95 bg-slate-800 text-white hover:bg-slate-900"
-          >
-            <Settings size={16} /> Manage
           </button>
         )}
       </div>
 
       {showDetails && <RequestDetailsModal request={request} onClose={() => setShowDetails(false)} />}
-      {showManage && <ManageRequestModal request={request} onClose={() => setShowManage(false)} />}
+      {showManage && isOwner && <ManageRequestModal request={request} onClose={() => setShowManage(false)} />}
     </div>
   );
 }

@@ -16,6 +16,9 @@ export interface BloodRequestPayload {
 export interface BloodRequestResponse {
   id: string;
   recipient_id?: string | null;
+  recipient_user_id?: string | null;
+  owner_id?: string | null;
+  is_owner?: boolean;
   blood_group: string;
   units_required: number;
   units_fulfilled: number;
@@ -109,6 +112,17 @@ export const requestService = {
       return res.data.payload.request;
     }
     throw new Error(res.data?.message || 'Failed to cancel blood request');
+  },
+
+  /**
+   * Delete / Cancel a donation request (restricted to owner).
+   */
+  async deleteRequest(requestId: string | number): Promise<BloodRequestResponse> {
+    const res = await apiClient.delete(`/requests/${requestId}`);
+    if (res.data && res.data.success) {
+      return res.data.payload.request;
+    }
+    throw new Error(res.data?.message || 'Failed to delete blood request');
   },
 
   /**

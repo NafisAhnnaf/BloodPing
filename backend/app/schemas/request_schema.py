@@ -1,6 +1,6 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 
 class BloodRequestCreate(BaseModel):
     blood_group: str
@@ -13,6 +13,16 @@ class BloodRequestCreate(BaseModel):
     is_urgent: bool = False
     notes: Optional[str] = None
     required_by: datetime
+
+    @field_validator('required_by')
+    @classmethod
+    def validate_required_by(cls, v: datetime) -> datetime:
+        if v.tzinfo is None:
+            v = v.replace(tzinfo=timezone.utc)
+        now = datetime.now(timezone.utc)
+        if v.date() < now.date():
+            raise ValueError("Required by date cannot be in the past. Please select today or a future date.")
+        return v
 
 class StandardResponse(BaseModel):
     success: bool
@@ -31,6 +41,16 @@ class BloodRequestUpdate(BaseModel):
     notes: Optional[str] = None
     required_by: datetime
 
+    @field_validator('required_by')
+    @classmethod
+    def validate_required_by(cls, v: datetime) -> datetime:
+        if v.tzinfo is None:
+            v = v.replace(tzinfo=timezone.utc)
+        now = datetime.now(timezone.utc)
+        if v.date() < now.date():
+            raise ValueError("Required by date cannot be in the past. Please select today or a future date.")
+        return v
+
 class BloodRequestItem(BaseModel):
     id: str
     blood_group: str
@@ -46,8 +66,13 @@ class BloodRequestItem(BaseModel):
     required_by: Optional[str] = None
     status: str
     created_at: Optional[str] = None
+    recipient_id: Optional[str] = None
+    recipient_user_id: Optional[str] = None
+    owner_id: Optional[str] = None
+    is_owner: Optional[bool] = None
     recipient_name: Optional[str] = None
     recipient_phone: Optional[str] = None
+
 
 class RequestStatusSummary(BaseModel):
     request_status: str

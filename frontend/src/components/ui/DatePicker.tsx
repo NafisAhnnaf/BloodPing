@@ -6,15 +6,27 @@ interface DatePickerProps {
   value: string;
   onChange: (date: string) => void;
   placeholder?: string;
+  minDate?: string;
+  disablePast?: boolean;
 }
 
-export function DatePicker({ value, onChange, placeholder = "Select Date" }: DatePickerProps) {
+export function DatePicker({ 
+  value, 
+  onChange, 
+  placeholder = "Select Date",
+  minDate,
+  disablePast = true
+}: DatePickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [dropdownStyles, setDropdownStyles] = useState<React.CSSProperties>({});
   
-  const initialDate = value ? new Date(value + 'T12:00:00Z') : new Date();
+  const now = new Date();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const effectiveMinDate = minDate !== undefined ? minDate : (disablePast ? todayStr : undefined);
+
+  const initialDate = value ? new Date(value + 'T12:00:00Z') : (effectiveMinDate ? new Date(effectiveMinDate + 'T12:00:00Z') : new Date());
   const [viewDate, setViewDate] = useState(new Date(initialDate.getFullYear(), initialDate.getMonth(), 1));
 
   useEffect(() => {
@@ -57,7 +69,17 @@ export function DatePicker({ value, onChange, placeholder = "Select Date" }: Dat
   const daysInMonth = getDaysInMonth(year, month);
   const firstDay = getFirstDayOfMonth(year, month);
 
-  const prevMonth = () => setViewDate(new Date(year, month - 1, 1));
+  const isPrevMonthDisabled = Boolean(
+    effectiveMinDate && (
+      year < now.getFullYear() || 
+      (year === now.getFullYear() && month <= now.getMonth())
+    )
+  );
+
+  const prevMonth = () => {
+    if (isPrevMonthDisabled) return;
+    setViewDate(new Date(year, month - 1, 1));
+  };
   const nextMonth = () => setViewDate(new Date(year, month + 1, 1));
 
   const days = [];
@@ -67,23 +89,29 @@ export function DatePicker({ value, onChange, placeholder = "Select Date" }: Dat
   for (let d = 1; d <= daysInMonth; d++) {
     const currentDateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     const isMatched = value === currentDateStr;
-    const isToday = new Date().toISOString().split('T')[0] === currentDateStr;
+    const isToday = todayStr === currentDateStr;
+    const isPast = Boolean(effectiveMinDate && currentDateStr < effectiveMinDate);
 
     days.push(
       <button
         key={d}
         type="button"
+        disabled={isPast}
         onClick={() => {
+          if (isPast) return;
           onChange(currentDateStr);
           setIsOpen(false);
         }}
         className={`w-8 h-8 flex items-center justify-center rounded-full text-sm font-medium transition-colors ${
           isMatched 
             ? 'bg-red-600 text-white shadow-md font-bold' 
-            : isToday 
-              ? 'text-red-600 bg-red-50 hover:bg-red-100 font-bold'
-              : 'text-slate-700 hover:bg-slate-100'
+            : isPast
+              ? 'text-slate-300 opacity-30 cursor-not-allowed line-through hover:bg-transparent pointer-events-none'
+              : isToday 
+                ? 'text-red-600 bg-red-50 hover:bg-red-100 font-bold border border-red-200'
+                : 'text-slate-700 hover:bg-slate-100'
         }`}
+        title={isPast ? "Past dates cannot be selected" : isToday ? "Today" : undefined}
       >
         {d}
       </button>
@@ -112,7 +140,17 @@ export function DatePicker({ value, onChange, placeholder = "Select Date" }: Dat
           className="z-[99999] bg-white/95 backdrop-blur-xl border border-slate-100 rounded-2xl shadow-2xl p-4 animate-in fade-in slide-in-from-top-2"
         >
           <div className="flex items-center justify-between mb-4">
-            <button type="button" onClick={prevMonth} className="p-1.5 rounded-full hover:bg-slate-100 text-slate-500 transition-colors">
+            <button 
+              type="button" 
+              onClick={prevMonth} 
+              disabled={isPrevMonthDisabled}
+              className={`p-1.5 rounded-full transition-colors ${
+                isPrevMonthDisabled 
+                  ? 'text-slate-300 opacity-30 cursor-not-allowed' 
+                  : 'hover:bg-slate-100 text-slate-500'
+              }`}
+              title={isPrevMonthDisabled ? "Cannot navigate to past months" : "Previous month"}
+            >
               <ChevronLeft size={16} />
             </button>
             <span className="font-extrabold text-slate-800 text-sm">
@@ -133,6 +171,22 @@ export function DatePicker({ value, onChange, placeholder = "Select Date" }: Dat
           
           <div className="grid grid-cols-7 gap-1">
             {days}
+          </div>
+
+          <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs">
+            <button
+              type="button"
+              onClick={() => {
+                onChange(todayStr);
+                setIsOpen(false);
+              }}
+              className="font-extrabold text-red-600 hover:text-red-700 transition-colors"
+            >
+              Select Today
+            </button>
+            <span className="text-[10px] font-semibold text-slate-400">
+              Today or future dates only
+            </span>
           </div>
         </div>,
         document.body

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Droplet, Bell, ArrowLeft, Home, Trophy, History, User } from 'lucide-react';
-import { Link, useLocation } from 'react-router-dom';
+import { Droplet, Bell, ArrowLeft, Home, Trophy, History, User, Lock } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useRole } from '../../context/RoleContext';
 import { useAppData } from '../../context/AppDataContext';
 
@@ -20,9 +20,10 @@ export function Header({
   showLogo = true,
   showNotification = true
 }: HeaderProps) {
+  const navigate = useNavigate();
   const location = useLocation();
   const currentPath = location.pathname;
-  const { role, setRole, systemRole } = useRole();
+  const { role, setRole, systemRole, isDonorApproved } = useRole();
   const { notifications, markNotificationsRead } = useAppData();
 
   const hasUnread = notifications.some(n => !n.read);
@@ -106,16 +107,33 @@ export function Header({
       <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end">
         <div className="flex items-center gap-1 bg-white/50 backdrop-blur-md border border-white/60 p-1 rounded-full shadow-sm">
           <button
-            onClick={() => setRole('donor')}
-            className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${role === 'donor' ? 'bg-red-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-900'
-              }`}
+            onClick={async () => {
+              if (!isDonorApproved) {
+                navigate('/become-donor');
+                return;
+              }
+              await setRole('donor');
+            }}
+            title={!isDonorApproved ? "You are not a registered donor yet. Click to register." : "Switch to Donor view"}
+            className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 ${
+              role === 'donor' 
+                ? 'bg-red-600 text-white shadow-md' 
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
           >
-            Donor
+            <span>Donor</span>
+            {!isDonorApproved && (
+              <Lock size={12} className="text-amber-600 flex-shrink-0" />
+            )}
           </button>
           <button
             onClick={() => setRole('recipient')}
-            className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${role === 'recipient' ? 'bg-red-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-900'
-              }`}
+            title="Switch to Recipient view"
+            className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all ${
+              role === 'recipient' 
+                ? 'bg-red-600 text-white shadow-md' 
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
           >
             Recipient
           </button>

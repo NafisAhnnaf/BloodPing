@@ -36,9 +36,9 @@ export function ProtectedRoute({ children }: RouteProps) {
     return <Navigate to="/feed" replace />;
   }
 
-  // If active role is donor but the donor profile is not verified, show application screen
-  if (role === 'donor' && !isDonorApproved && location.pathname !== '/profile') {
-    return <BecomeDonorScreen />;
+  // If active role is donor but the donor profile is not verified, redirect to become-donor screen
+  if (role === 'donor' && !isDonorApproved && location.pathname !== '/become-donor') {
+    return <Navigate to="/become-donor" replace />;
   }
 
   return <>{children}</>;

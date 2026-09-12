@@ -14,6 +14,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { ProtectedRoute, GuestRoute } from './components/layout/RouteProtection';
 import { SetupProfilePage } from './pages/SetupProfilePage';
 import { AdminDashboard } from './pages/AdminDashboard';
+import { BecomeDonorScreen } from './components/ui/BecomeDonorScreen';
 
 function AppLayout() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -45,6 +46,7 @@ function AppLayout() {
         {/* Protected Routes */}
         <Route path="/setup-profile" element={<ProtectedRoute><SetupProfilePage /></ProtectedRoute>} />
         <Route path="/feed" element={<ProtectedRoute><FeedPage /></ProtectedRoute>} />
+        <Route path="/become-donor" element={<ProtectedRoute><BecomeDonorScreen /></ProtectedRoute>} />
         <Route path="/leaderboard" element={<ProtectedRoute><Leaderboard /></ProtectedRoute>} />
         <Route path="/profile" element={<ProtectedRoute><DonorProfileStats /></ProtectedRoute>} />
         <Route path="/history" element={<ProtectedRoute><HistoryPage /></ProtectedRoute>} />

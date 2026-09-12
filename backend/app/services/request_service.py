@@ -1,5 +1,6 @@
 import logging
 from typing import Dict, Any, List, Optional
+from datetime import datetime, timezone, time
 from app.database import get_db_connection
 from fastapi import HTTPException, status
 from app.schemas.request_schema import BloodRequestCreate, BloodRequestUpdate
@@ -7,11 +8,16 @@ from app.schemas.request_schema import BloodRequestCreate, BloodRequestUpdate
 logger = logging.getLogger(__name__)
 
 
-def _format_request_row(row: Dict[str, Any]) -> Dict[str, Any]:
+def _format_request_row(row: Dict[str, Any], current_user_id: Optional[str] = None) -> Dict[str, Any]:
     req_id = row.get("request_id") or row.get("id")
+    recipient_user_id = str(row["recipient_user_id"]) if "recipient_user_id" in row and row["recipient_user_id"] else None
+    is_owner = bool(current_user_id and recipient_user_id and str(current_user_id) == str(recipient_user_id))
     return {
         "id": str(req_id),
         "recipient_id": str(row["recipient_id"]) if "recipient_id" in row and row["recipient_id"] else None,
+        "recipient_user_id": recipient_user_id,
+        "owner_id": recipient_user_id,
+        "is_owner": is_owner,
         "blood_group": row.get("blood_group"),
         "units_required": row.get("units_required"),
         "units_fulfilled": row.get("units_fulfilled", 0),
@@ -31,6 +37,44 @@ def _format_request_row(row: Dict[str, Any]) -> Dict[str, Any]:
 
 
 class RequestService:
+    @staticmethod
+    def verify_request_owner(cursor, request_id: str, user_id: str) -> str:
+        """Verifies that the donation request exists and that user_id is the recipient owner.
+        
+        Returns recipient_id on success.
+        Raises 404 NOT FOUND if request does not exist.
+        Raises 403 FORBIDDEN if the authenticated user is not the owner.
+        """
+        cursor.execute(
+            """
+            SELECT dr.id, dr.recipient_id, r.user_id, r.is_active
+            FROM public.donation_requests dr
+            JOIN public.recipients r ON r.id = dr.recipient_id
+            WHERE dr.id = %s;
+            """,
+            (request_id,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Donation request not found."
+            )
+        
+        if str(row["user_id"]) != str(user_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: You do not have permission to manage this donation request. Only the request owner can manage, edit, or cancel it."
+            )
+            
+        if not row["is_active"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Recipient account is inactive."
+            )
+            
+        return str(row["recipient_id"])
+
     @staticmethod
     def _resolve_recipient_id(cursor, user_id: str, auto_create: bool = False) -> str:
         """Helper to resolve recipient_id from auth user_id, optionally creating the recipient record."""
@@ -63,14 +107,24 @@ class RequestService:
         return str(row["id"])
 
     @staticmethod
-    def get_all_requests() -> List[Dict[str, Any]]:
+    def get_all_requests(current_user_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """Retrieves all donation requests from the database via get_all_donation_requests."""
         with get_db_connection() as db:
             with db.cursor() as cursor:
                 try:
-                    cursor.execute("SELECT * FROM public.get_all_donation_requests();")
+                    cursor.execute(
+                        """
+                        SELECT 
+                            req.*,
+                            dr.recipient_id,
+                            r.user_id AS recipient_user_id
+                        FROM public.get_all_donation_requests() req
+                        JOIN public.donation_requests dr ON dr.id = req.request_id
+                        JOIN public.recipients r ON r.id = dr.recipient_id;
+                        """
+                    )
                     rows = cursor.fetchall()
-                    return [_format_request_row(r) for r in rows]
+                    return [_format_request_row(r, current_user_id) for r in rows]
                 except Exception as e:
                     logger.error(f"Error fetching all requests: {e}")
                     raise HTTPException(
@@ -79,14 +133,24 @@ class RequestService:
                     )
 
     @staticmethod
-    def get_active_requests() -> List[Dict[str, Any]]:
+    def get_active_requests(current_user_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """Retrieves only open, unexpired donation requests via public.get_active_requests."""
         with get_db_connection() as db:
             with db.cursor() as cursor:
                 try:
-                    cursor.execute("SELECT * FROM public.get_active_requests();")
+                    cursor.execute(
+                        """
+                        SELECT 
+                            req.*,
+                            dr.recipient_id,
+                            r.user_id AS recipient_user_id
+                        FROM public.get_active_requests() req
+                        JOIN public.donation_requests dr ON dr.id = req.request_id
+                        JOIN public.recipients r ON r.id = dr.recipient_id;
+                        """
+                    )
                     rows = cursor.fetchall()
-                    return [_format_request_row(r) for r in rows]
+                    return [_format_request_row(r, current_user_id) for r in rows]
                 except Exception as e:
                     err_msg = str(e)
                     if "No active requests found" in err_msg:
@@ -104,11 +168,19 @@ class RequestService:
             with db.cursor() as cursor:
                 try:
                     cursor.execute(
-                        "SELECT * FROM public.get_recipient_requests(%s::UUID);",
+                        """
+                        SELECT 
+                            req.*,
+                            dr.recipient_id,
+                            r.user_id AS recipient_user_id
+                        FROM public.get_recipient_requests(%s::UUID) req
+                        JOIN public.donation_requests dr ON dr.id = req.request_id
+                        JOIN public.recipients r ON r.id = dr.recipient_id;
+                        """,
                         (user_id,)
                     )
                     rows = cursor.fetchall()
-                    return [_format_request_row(r) for r in rows]
+                    return [_format_request_row(r, user_id) for r in rows]
                 except Exception as e:
                     err_msg = str(e)
                     if "No requests found for user" in err_msg:
@@ -120,13 +192,21 @@ class RequestService:
                     )
 
     @staticmethod
-    def get_request_by_id(request_id: str) -> Dict[str, Any]:
+    def get_request_by_id(request_id: str, current_user_id: Optional[str] = None) -> Dict[str, Any]:
         """Retrieves a single donation request by ID via public.get_request_by_id."""
         with get_db_connection() as db:
             with db.cursor() as cursor:
                 try:
                     cursor.execute(
-                        "SELECT * FROM public.get_request_by_id(%s::UUID);",
+                        """
+                        SELECT 
+                            req.*,
+                            dr.recipient_id,
+                            r.user_id AS recipient_user_id
+                        FROM public.get_request_by_id(%s::UUID) req
+                        JOIN public.donation_requests dr ON dr.id = req.request_id
+                        JOIN public.recipients r ON r.id = dr.recipient_id;
+                        """,
                         (request_id,)
                     )
                     row = cursor.fetchone()
@@ -135,7 +215,7 @@ class RequestService:
                             status_code=status.HTTP_404_NOT_FOUND,
                             detail="Donation request not found."
                         )
-                    return _format_request_row(row)
+                    return _format_request_row(row, current_user_id)
                 except HTTPException:
                     raise
                 except Exception as e:
@@ -152,11 +232,34 @@ class RequestService:
                     )
 
     @staticmethod
+    def _validate_required_by(required_by: datetime) -> datetime:
+        """Validates that required_by is today or a future date.
+        If a past date is provided, raises 400 Bad Request.
+        If today's date is provided with a time in the past or midnight,
+        adjusts to end of day so Postgres CHECK (required_by > created_at) passes.
+        """
+        if required_by.tzinfo is None:
+            required_by = required_by.replace(tzinfo=timezone.utc)
+        now = datetime.now(timezone.utc)
+
+        if required_by.date() < now.date():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Required by date cannot be in the past. Please select today or a future date."
+            )
+
+        if required_by <= now:
+            required_by = datetime.combine(now.date(), time(23, 59, 59), tzinfo=timezone.utc)
+
+        return required_by
+
+    @staticmethod
     def create_request(user_id: str, request_data: BloodRequestCreate) -> Dict[str, Any]:
         """Resolves recipient profile and calls create_blood_request PL/pgSQL function."""
         with get_db_connection() as db:
             with db.cursor() as cursor:
                 try:
+                    validated_required_by = RequestService._validate_required_by(request_data.required_by)
                     recipient_id = RequestService._resolve_recipient_id(cursor, user_id, auto_create=True)
                     cursor.execute(
                         """
@@ -185,7 +288,7 @@ class RequestService:
                             request_data.search_radius_km,
                             request_data.is_urgent,
                             request_data.notes,
-                            request_data.required_by,
+                            validated_required_by,
                         ),
                     )
                     row = cursor.fetchone()
@@ -194,7 +297,11 @@ class RequestService:
                     if not row:
                         raise Exception("No data returned from create_blood_request")
 
-                    return _format_request_row(row)
+                    result = _format_request_row(row, user_id)
+                    result["recipient_user_id"] = str(user_id)
+                    result["owner_id"] = str(user_id)
+                    result["is_owner"] = True
+                    return result
                 except HTTPException:
                     db.rollback()
                     raise
@@ -212,7 +319,9 @@ class RequestService:
         with get_db_connection() as db:
             with db.cursor() as cursor:
                 try:
-                    recipient_id = RequestService._resolve_recipient_id(cursor, user_id, auto_create=False)
+                    # Enforce that caller is the owner of this request
+                    validated_required_by = RequestService._validate_required_by(request_data.required_by)
+                    recipient_id = RequestService.verify_request_owner(cursor, request_id, user_id)
                     cursor.execute(
                         """
                         SELECT * FROM public.update_blood_request(
@@ -242,7 +351,7 @@ class RequestService:
                             request_data.search_radius_km,
                             request_data.is_urgent,
                             request_data.notes,
-                            request_data.required_by,
+                            validated_required_by,
                         ),
                     )
                     row = cursor.fetchone()
@@ -251,7 +360,11 @@ class RequestService:
                     if not row:
                         raise Exception("No data returned from update_blood_request")
 
-                    return _format_request_row(row)
+                    result = _format_request_row(row, user_id)
+                    result["recipient_user_id"] = str(user_id)
+                    result["owner_id"] = str(user_id)
+                    result["is_owner"] = True
+                    return result
                 except HTTPException:
                     db.rollback()
                     raise
@@ -269,7 +382,34 @@ class RequestService:
         with get_db_connection() as db:
             with db.cursor() as cursor:
                 try:
-                    recipient_id = RequestService._resolve_recipient_id(cursor, user_id, auto_create=False)
+                    # Enforce that caller is the owner of this request
+                    recipient_id = RequestService.verify_request_owner(cursor, request_id, user_id)
+                    
+                    # Check if already cancelled
+                    cursor.execute(
+                        "SELECT status FROM public.donation_requests WHERE id = %s;",
+                        (request_id,)
+                    )
+                    curr = cursor.fetchone()
+                    if curr and curr.get("status") == "cancelled":
+                        cursor.execute(
+                            """
+                            SELECT req.*, dr.recipient_id, r.user_id AS recipient_user_id
+                            FROM public.get_request_by_id(%s::UUID) req
+                            JOIN public.donation_requests dr ON dr.id = req.request_id
+                            JOIN public.recipients r ON r.id = dr.recipient_id;
+                            """,
+                            (request_id,)
+                        )
+                        row = cursor.fetchone()
+                        if row:
+                            result = _format_request_row(row, user_id)
+                            result["recipient_user_id"] = str(user_id)
+                            result["owner_id"] = str(user_id)
+                            result["is_owner"] = True
+                            return result
+                        return {"id": request_id, "status": "cancelled", "recipient_user_id": str(user_id), "owner_id": str(user_id), "is_owner": True}
+
                     cursor.execute(
                         "SELECT * FROM public.cancel_request(%s::UUID, %s::UUID);",
                         (request_id, recipient_id),
@@ -280,7 +420,11 @@ class RequestService:
                     if not row:
                         raise Exception("No data returned from cancel_request")
 
-                    return _format_request_row(row)
+                    result = _format_request_row(row, user_id)
+                    result["recipient_user_id"] = str(user_id)
+                    result["owner_id"] = str(user_id)
+                    result["is_owner"] = True
+                    return result
                 except HTTPException:
                     db.rollback()
                     raise
@@ -293,12 +437,56 @@ class RequestService:
                     )
 
     @staticmethod
+    def delete_request(user_id: str, request_id: str) -> Dict[str, Any]:
+        """Permanently deletes a donation request owned by user_id."""
+        with get_db_connection() as db:
+            with db.cursor() as cursor:
+                try:
+                    # Enforce that caller is the owner of this request
+                    recipient_id = RequestService.verify_request_owner(cursor, request_id, user_id)
+                    
+                    cursor.execute(
+                        "SELECT status, units_fulfilled FROM public.donation_requests WHERE id = %s;",
+                        (request_id,)
+                    )
+                    req_row = cursor.fetchone()
+                    if req_row and (req_row.get("units_fulfilled") or 0) > 0:
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Cannot delete a donation request that has already fulfilled units."
+                        )
+
+                    cursor.execute(
+                        "DELETE FROM public.donation_requests WHERE id = %s AND recipient_id = %s RETURNING id;",
+                        (request_id, recipient_id)
+                    )
+                    deleted = cursor.fetchone()
+                    if not deleted:
+                        raise HTTPException(
+                            status_code=status.HTTP_404_NOT_FOUND,
+                            detail="Donation request not found."
+                        )
+                    db.commit()
+                    return {"id": request_id, "status": "deleted"}
+                except HTTPException:
+                    db.rollback()
+                    raise
+                except Exception as e:
+                    db.rollback()
+                    logger.error(f"Error deleting blood request {request_id}: {e}")
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=str(e),
+                    )
+
+    @staticmethod
     def mark_request_fulfilled(user_id: str, request_id: str) -> Dict[str, Any]:
         """Validates recipient ownership and calls public.mark_request_fulfilled PL/pgSQL function."""
         with get_db_connection() as db:
             with db.cursor() as cursor:
                 try:
-                    recipient_id = RequestService._resolve_recipient_id(cursor, user_id, auto_create=False)
+                    # Enforce that caller is the owner of this request
+                    recipient_id = RequestService.verify_request_owner(cursor, request_id, user_id)
                     cursor.execute(
                         "SELECT * FROM public.mark_request_fulfilled(%s::UUID, %s::UUID);",
                         (request_id, recipient_id),
@@ -309,7 +497,11 @@ class RequestService:
                     if not row:
                         raise Exception("No data returned from mark_request_fulfilled")
 
-                    return _format_request_row(row)
+                    result = _format_request_row(row, user_id)
+                    result["recipient_user_id"] = str(user_id)
+                    result["owner_id"] = str(user_id)
+                    result["is_owner"] = True
+                    return result
                 except HTTPException:
                     db.rollback()
                     raise
@@ -360,11 +552,13 @@ class RequestService:
                     )
 
     @staticmethod
-    def get_request_history(request_id: str) -> List[Dict[str, Any]]:
-        """Retrieves all donor applicants for the request via public.get_request_history."""
+    def get_request_history(request_id: str, user_id: str) -> List[Dict[str, Any]]:
+        """Retrieves all donor applicants for the request (restricted to owning recipient)."""
         with get_db_connection() as db:
             with db.cursor() as cursor:
                 try:
+                    # Enforce that caller is the owner of this request
+                    RequestService.verify_request_owner(cursor, request_id, user_id)
                     cursor.execute(
                         "SELECT * FROM public.get_request_history(%s::UUID);",
                         (request_id,),
@@ -383,6 +577,8 @@ class RequestService:
                             "confirmed_at": r["confirmed_at"].isoformat() if r.get("confirmed_at") else None,
                         })
                     return result
+                except HTTPException:
+                    raise
                 except Exception as e:
                     err_msg = str(e)
                     if "No history found" in err_msg:
@@ -392,3 +588,4 @@ class RequestService:
                         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                         detail="Failed to retrieve request applicant history."
                     )
+
