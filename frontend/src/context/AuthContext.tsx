@@ -3,6 +3,7 @@ import { supabase } from '../services/supabaseClient';
 import { useAuthStore } from '../stores/authStore';
 import { Session, User } from '@supabase/supabase-js';
 import apiClient from '../services/apiClient';
+import { sessionService } from '../services/sessionService';
 
 interface AuthContextType {
   session: Session | null;
@@ -125,13 +126,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = async () => {
     setIsLoading(true);
     try {
+      await sessionService.logoutSession();
       await supabase.auth.signOut();
+    } catch (err) {
+      console.error('Logout error:', err);
     } finally {
       clearSession();
       setHasProfile(null);
       setIsLoading(false);
     }
   };
+
 
   const user = session ? session.user : null;
   const isAuthenticated = !!session;

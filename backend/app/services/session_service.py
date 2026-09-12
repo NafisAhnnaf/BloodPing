@@ -217,3 +217,55 @@ class SessionService:
             logger.error(f"Error terminating all sessions for user {user_id}: {e}")
             raise e
 
+    @staticmethod
+    def terminate_current_session(
+        user_id: str,
+        ip_address: Optional[str] = None,
+        user_agent: Optional[str] = None,
+    ) -> bool:
+        """Deactivates the active session for this user on the current device/IP upon logout."""
+        try:
+            with get_db_connection() as db:
+                with db.cursor() as cursor:
+                    if ip_address:
+                        cursor.execute(
+                            """
+                            UPDATE public.user_sessions
+                            SET is_active = FALSE,
+                                last_active_at = NOW()
+                            WHERE user_id = %s
+                              AND ip_address = %s::inet
+                              AND COALESCE(user_agent, '') = COALESCE(%s, '')
+                              AND is_active = TRUE;
+                            """,
+                            (user_id, ip_address, user_agent),
+                        )
+                        if cursor.rowcount > 0:
+                            db.commit()
+                            logger.info(f"Terminated active session for user {user_id} on IP {ip_address}")
+                            return True
+
+                    # Fallback: deactivate latest active session for this user
+                    cursor.execute(
+                        """
+                        UPDATE public.user_sessions
+                        SET is_active = FALSE,
+                            last_active_at = NOW()
+                        WHERE id = (
+                            SELECT id FROM public.user_sessions
+                            WHERE user_id = %s AND is_active = TRUE
+                            ORDER BY last_active_at DESC
+                            LIMIT 1
+                        );
+                        """,
+                        (user_id,),
+                    )
+                    revoked = cursor.rowcount > 0
+                    db.commit()
+                    logger.info(f"Terminated fallback active session for user {user_id} (success={revoked})")
+                    return revoked
+        except Exception as e:
+            logger.error(f"Error terminating current session for user {user_id}: {e}")
+            raise e
+
+

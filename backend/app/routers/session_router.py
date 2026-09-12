@@ -107,6 +107,36 @@ def record_session(
         )
 
 
+@router.post("/logout", response_model=StandardResponse)
+def logout_current_session(
+    request: Request,
+    user_id: str = Depends(require_auth),
+):
+    """Terminates the active user session for the current client upon logout."""
+    try:
+        client_ip = extract_client_ip(request)
+        user_agent = request.headers.get("user-agent")
+
+        success = SessionService.terminate_current_session(
+            user_id=user_id,
+            ip_address=client_ip,
+            user_agent=user_agent,
+        )
+
+        return StandardResponse(
+            success=True,
+            code=status.HTTP_200_OK,
+            message="Session terminated successfully upon logout.",
+            payload={"terminated": success},
+        )
+    except Exception as e:
+        logger.error(f"Failed to logout session for user {user_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to terminate session on logout.",
+        )
+
+
 @router.post("/{session_id}/terminate", response_model=StandardResponse)
 def terminate_session(
     session_id: str,

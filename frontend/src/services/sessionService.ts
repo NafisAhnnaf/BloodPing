@@ -139,4 +139,18 @@ export const sessionService = {
     const res = await apiClient.post('/sessions/terminate-all', { password });
     return res.data?.payload?.revoked_count ?? 0;
   },
+
+  /**
+   * Notifies the backend to terminate the current active session upon user logout.
+   */
+  async logoutSession(): Promise<boolean> {
+    try {
+      const res = await apiClient.post('/sessions/logout');
+      return res.data?.success ?? false;
+    } catch (err) {
+      console.warn('Backend logout notification failed:', err);
+      return false;
+    }
+  },
 };
+
