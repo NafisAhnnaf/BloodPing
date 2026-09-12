@@ -27,7 +27,7 @@ export function FeedPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [maxDistance, setMaxDistance] = useState<number>(25); // default 25km per specification
   const [urgencyFilter, setUrgencyFilter] = useState<'all' | 'urgent' | 'open'>('all');
-  const [sortBy, setSortBy] = useState<'nearest' | 'urgent' | 'latest' | 'oldest' | 'abc'>('nearest');
+  const [sortBy, setSortBy] = useState<'nearest' | 'urgent' | 'latest' | 'oldest' | 'abc' | 'deadline'>('nearest');
   const [showCreateModal, setShowCreateModal] = useState(false);
   
   // Pagination
@@ -50,7 +50,7 @@ export function FeedPage() {
     });
   }, [maxDistance]);
 
-  const processedRequests = useMemo(() => {
+  const { processedRequests, isProximityFallback } = useMemo(() => {
     let result = [...requests];
 
     // Filter by Blood Group
@@ -64,15 +64,31 @@ export function FeedPage() {
       result = result.filter(req => req.hospital.toLowerCase().includes(q));
     }
 
-    // Filter by Distance
-    result = result.filter(req => req.distance <= maxDistance);
-
     // Filter by Urgency
     if (urgencyFilter === 'urgent') result = result.filter(req => req.urgent);
     if (urgencyFilter === 'open') result = result.filter(req => !req.urgent);
 
+    // Filter by Distance
+    const withinDistance = result.filter(req => req.distance <= maxDistance);
+    const isFallback = withinDistance.length === 0 && result.length > 0;
+    const listToDisplay = isFallback ? [...result] : withinDistance;
+
     // Sorting
-    result.sort((a, b) => {
+    listToDisplay.sort((a, b) => {
+      // In proximity fallback mode when sortBy is default 'nearest', rank by latest deadline first
+      if (isFallback && sortBy === 'nearest') {
+        const deadlineA = a.deadline ? new Date(a.deadline).getTime() : 0;
+        const deadlineB = b.deadline ? new Date(b.deadline).getTime() : 0;
+        if (deadlineB !== deadlineA) return deadlineB - deadlineA;
+        return new Date(b.date).getTime() - new Date(a.date).getTime();
+      }
+
+      if (sortBy === 'deadline') {
+        const deadlineA = a.deadline ? new Date(a.deadline).getTime() : 0;
+        const deadlineB = b.deadline ? new Date(b.deadline).getTime() : 0;
+        if (deadlineB !== deadlineA) return deadlineB - deadlineA;
+        return new Date(b.date).getTime() - new Date(a.date).getTime();
+      }
       if (sortBy === 'nearest') {
         // Tier 1: Urgent requests within 25 km come first
         const aUrgentClose = a.urgent && a.distance <= 25 ? 0 : 1;
@@ -93,7 +109,7 @@ export function FeedPage() {
       return dateA - dateB;
     });
 
-    return result;
+    return { processedRequests: listToDisplay, isProximityFallback: isFallback };
   }, [requests, activeGroup, searchQuery, maxDistance, urgencyFilter, sortBy]);
 
   // Pagination Logic
@@ -249,6 +265,7 @@ export function FeedPage() {
                        onChange={(val) => setSortBy(val as any)}
                        options={[
                          { label: 'Nearest First (Proximity)', value: 'nearest' },
+                         { label: 'Latest Deadline First', value: 'deadline' },
                          { label: 'Most Urgent First', value: 'urgent' },
                          { label: 'Latest First', value: 'latest' },
                          { label: 'Oldest First', value: 'oldest' },
@@ -316,6 +333,16 @@ export function FeedPage() {
               )}
             </button>
           </div>
+
+          {/* Proximity Fallback Notice */}
+          {isProximityFallback && (
+            <div className="flex items-center gap-3 bg-amber-500/10 border border-amber-500/30 px-4 py-3 rounded-2xl text-amber-900 shadow-sm animate-in fade-in">
+              <AlertCircle size={18} className="text-amber-600 flex-shrink-0" />
+              <p className="text-xs font-semibold leading-relaxed">
+                No blood requests found within <span className="font-bold">{maxDistance} km</span>. Showing all active requests ordered by <span className="font-bold">latest deadline first</span>.
+              </p>
+            </div>
+          )}
 
           {/* Vertical Feed Content */}
           <section className="flex flex-col gap-4">

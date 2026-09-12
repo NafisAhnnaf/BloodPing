@@ -96,6 +96,60 @@ BEGIN
     END IF;
 
     -- 4. Query and rank requests
+    -- Attempt 1: Proximity-based search within user radius
+    IF v_user_location IS NOT NULL THEN
+        RETURN QUERY
+        SELECT 
+            dr.id AS request_id,
+            dr.blood_group,
+            dr.units_required,
+            dr.units_fulfilled,
+            dr.hospital_name,
+            ST_Y(dr.hospital_location::geometry) AS hospital_lat,
+            ST_X(dr.hospital_location::geometry) AS hospital_lng,
+            dr.hospital_address,
+            dr.search_radius_km,
+            dr.is_urgent,
+            dr.notes,
+            dr.required_by,
+            dr.status,
+            dr.created_at,
+            p.full_name AS recipient_name,
+            p.phone AS recipient_phone,
+            ROUND((ST_Distance(dr.hospital_location, v_user_location) / 1000.0)::numeric, 2)::DOUBLE PRECISION AS distance_km,
+            (
+                GREATEST(0.0, 100.0 - (ST_Distance(dr.hospital_location, v_user_location) / 1000.0) * 2.0)
+                + (CASE WHEN dr.is_urgent THEN 40.0 ELSE 0.0 END)
+                + (CASE WHEN v_donor_blood IS NOT NULL AND dr.blood_group = v_donor_blood THEN 25.0 ELSE 0.0 END)
+                + (CASE WHEN dr.created_at >= NOW() - INTERVAL '24 hours' THEN 10.0 ELSE 0.0 END)
+            )::DOUBLE PRECISION AS match_score
+        FROM public.donation_requests dr
+        INNER JOIN public.recipients r ON dr.recipient_id = r.id
+        INNER JOIN public.profiles p ON r.user_id = p.id
+        WHERE dr.status = 'open'::public.donation_request_status
+          AND dr.required_by > NOW()
+          AND (p_blood_group_filter IS NULL OR dr.blood_group = p_blood_group_filter)
+          AND ST_DWithin(dr.hospital_location, v_user_location, v_effective_radius_km * 1000.0)
+        ORDER BY 
+            CASE 
+                WHEN dr.is_urgent AND ((ST_Distance(dr.hospital_location, v_user_location) / 1000.0) <= 25.0) 
+                THEN 0 
+                ELSE 1 
+            END ASC,
+            (ST_Distance(dr.hospital_location, v_user_location) / 1000.0) ASC,
+            dr.required_by DESC,
+            dr.created_at DESC
+        LIMIT p_limit
+        OFFSET p_offset;
+
+        -- If matching requests were found on proximity basis, return them
+        IF FOUND THEN
+            RETURN;
+        END IF;
+    END IF;
+
+    -- Attempt 2 (Fallback): If no requests were found on proximity basis (or no user location),
+    -- fall back to showing all active requests ordered by latest deadline first
     RETURN QUERY
     SELECT 
         dr.id AS request_id,
@@ -114,13 +168,11 @@ BEGIN
         dr.created_at,
         p.full_name AS recipient_name,
         p.phone AS recipient_phone,
-        -- Calculated Distance in Kilometers
         CASE 
             WHEN v_user_location IS NOT NULL THEN 
                 ROUND((ST_Distance(dr.hospital_location, v_user_location) / 1000.0)::numeric, 2)::DOUBLE PRECISION
-            ELSE 0.0
+            ELSE 0.0::DOUBLE PRECISION
         END AS distance_km,
-        -- Composite Match Score (Proximity + Urgency + Blood Match + Freshness)
         (
             CASE 
                 WHEN v_user_location IS NOT NULL THEN 
@@ -130,31 +182,15 @@ BEGIN
             + (CASE WHEN dr.is_urgent THEN 40.0 ELSE 0.0 END)
             + (CASE WHEN v_donor_blood IS NOT NULL AND dr.blood_group = v_donor_blood THEN 25.0 ELSE 0.0 END)
             + (CASE WHEN dr.created_at >= NOW() - INTERVAL '24 hours' THEN 10.0 ELSE 0.0 END)
-        ) AS match_score
+        )::DOUBLE PRECISION AS match_score
     FROM public.donation_requests dr
     INNER JOIN public.recipients r ON dr.recipient_id = r.id
     INNER JOIN public.profiles p ON r.user_id = p.id
     WHERE dr.status = 'open'::public.donation_request_status
       AND dr.required_by > NOW()
       AND (p_blood_group_filter IS NULL OR dr.blood_group = p_blood_group_filter)
-      -- Spatial filter: utilizes GiST index when user location is available
-      AND (
-          v_user_location IS NULL 
-          OR ST_DWithin(dr.hospital_location, v_user_location, v_effective_radius_km * 1000.0)
-      )
     ORDER BY 
-        -- Tier 1: Urgent requests within 25 km outrank non-urgent requests right next door
-        CASE 
-            WHEN dr.is_urgent AND (v_user_location IS NULL OR (ST_Distance(dr.hospital_location, v_user_location) / 1000.0) <= 25.0) 
-            THEN 0 
-            ELSE 1 
-        END ASC,
-        -- Tier 2: Non-urgent requests ordered strictly by distance (nearest first)
-        CASE 
-            WHEN v_user_location IS NOT NULL THEN (ST_Distance(dr.hospital_location, v_user_location) / 1000.0) 
-            ELSE 0.0 
-        END ASC,
-        -- Tier 3: Recency tie-breaker
+        dr.required_by DESC,
         dr.created_at DESC
     LIMIT p_limit
     OFFSET p_offset;
