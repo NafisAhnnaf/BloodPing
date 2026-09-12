@@ -4,8 +4,9 @@ import { useAuthStore } from '../stores/authStore';
 import { supabase } from '../services/supabaseClient';
 import apiClient from '../services/apiClient';
 import { sessionService } from '../services/sessionService';
+import { requestService } from '../services/requestService';
 
-export type RequestStatus = 'open' | 'pending' | 'completed' | 'canceled';
+export type RequestStatus = 'open' | 'pending' | 'completed' | 'canceled' | 'cancelled' | 'in_progress' | 'fulfilled' | 'expired';
 export type ApplicationStatus = 'pending' | 'accepted' | 'completed' | 'rejected' | 'canceled';
 
 export interface Application {
@@ -65,9 +66,9 @@ interface AppDataContextType {
   signup: (formData: any) => Promise<void>;
   logout: () => Promise<void>;
   applyToRequest: (reqId: string | number) => void;
-  createRequest: (req: Omit<BloodRequest, 'id' | 'date' | 'status' | 'unitsFulfilled' | 'applicants' | 'applications'>) => void;
-  updateRequest: (reqId: string | number, reqData: Partial<BloodRequest>) => void;
-  deleteRequest: (reqId: string | number) => void;
+  createRequest: (req: Omit<BloodRequest, 'id' | 'date' | 'status' | 'unitsFulfilled' | 'applicants' | 'applications'>) => Promise<void> | void;
+  updateRequest: (reqId: string | number, reqData: Partial<BloodRequest>) => Promise<void> | void;
+  deleteRequest: (reqId: string | number) => Promise<void> | void;
   updateApplicationStatus: (reqId: string | number, donorId: number, newStatus: ApplicationStatus) => void;
   cancelApplication: (reqId: string | number, reason: string) => void;
   notifications: NotificationItem[];
@@ -278,14 +279,50 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const updateRequest = (reqId: string | number, reqData: Partial<BloodRequest>) => {
-    setRequests(prev => prev.map(req => 
-      req.id === reqId ? { ...req, ...reqData } : req
-    ));
+  const updateRequest = async (reqId: string | number, reqData: Partial<BloodRequest>) => {
+    const current = requests.find(r => r.id === reqId);
+    try {
+      await requestService.updateRequest(reqId, {
+        blood_group: reqData.bloodGroup || current?.bloodGroup || 'A+',
+        units_required: reqData.unitsRequired ?? current?.unitsRequired ?? 1,
+        hospital_name: reqData.hospital || current?.hospital || 'Hospital',
+        hospital_lat: 0.0,
+        hospital_lng: 0.0,
+        hospital_address: reqData.address ?? current?.address ?? '',
+        search_radius_km: reqData.preferredDistance ?? current?.preferredDistance ?? 10.0,
+        is_urgent: reqData.urgent ?? current?.urgent ?? false,
+        notes: reqData.description ?? current?.description ?? '',
+        required_by: reqData.deadline 
+          ? new Date(reqData.deadline).toISOString() 
+          : (current?.deadline ? new Date(current.deadline).toISOString() : new Date(Date.now() + 86400000).toISOString()),
+      });
+      await fetchRequests();
+      addNotification({
+        recipientId: 'recipient',
+        message: 'Donation request updated successfully.',
+      });
+    } catch (err) {
+      console.error('Failed to update request on backend:', err);
+      // Fallback: local update
+      setRequests(prev => prev.map(req => 
+        req.id === reqId ? { ...req, ...reqData } : req
+      ));
+    }
   };
 
-  const deleteRequest = (reqId: string | number) => {
-    setRequests(prev => prev.filter(req => req.id !== reqId));
+  const deleteRequest = async (reqId: string | number) => {
+    try {
+      await requestService.cancelRequest(reqId);
+      await fetchRequests();
+      addNotification({
+        recipientId: 'recipient',
+        message: 'Donation request cancelled successfully.',
+      });
+    } catch (err) {
+      console.error('Failed to cancel request on backend:', err);
+      // Fallback: local remove
+      setRequests(prev => prev.filter(req => req.id !== reqId));
+    }
   };
 
   const updateApplicationStatus = (reqId: string | number, donorId: number, newStatus: ApplicationStatus) => {
