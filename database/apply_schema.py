@@ -82,6 +82,17 @@ def main():
     # Sort procedures
     procs.sort(key=lambda x: os.path.basename(x))
     sql_files.extend(procs)
+
+    # 4. Triggers
+    triggers_dir = os.path.join(os.path.dirname(__file__), 'plpgsql/triggers')
+    if os.path.isdir(triggers_dir):
+        trigs = []
+        for f in os.listdir(triggers_dir):
+            p = os.path.join(triggers_dir, f)
+            if os.path.isfile(p) and f.endswith('.sql'):
+                trigs.append(p)
+        trigs.sort(key=lambda x: os.path.basename(x))
+        sql_files.extend(trigs)
     
     # Run all SQL files
     for sql_file in sql_files:
