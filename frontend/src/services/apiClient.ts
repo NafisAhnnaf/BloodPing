@@ -30,7 +30,7 @@ apiClient.interceptors.request.use(
   }
 );
 
-// Interceptor to handle authentication failures (e.g. automatically log out on 401)
+// Interceptor to handle authentication failures and user suspensions
 apiClient.interceptors.response.use(
   (response) => {
     console.log(`[HTTP Response] ${response.config.method?.toUpperCase()} ${response.config.url} - Status: ${response.status}`, response.data);
@@ -38,6 +38,21 @@ apiClient.interceptors.response.use(
   },
   (error) => {
     console.error(`[HTTP Error] ${error.config?.method?.toUpperCase()} ${error.config?.url} - Status: ${error.response?.status || 'network_error'}`, error.response?.data || error.message);
+
+    // Handle User Suspension (403 Forbidden with is_banned flag)
+    if (error.response?.status === 403 && error.response?.data?.is_banned) {
+      const banReason = error.response.data.ban_reason || 'Account suspended by administrator.';
+      localStorage.setItem('ban_reason', banReason);
+      useAuthStore.getState().clearSession();
+      supabase.auth.signOut().catch((err) => {
+        console.error('Failed to revoke session on Supabase during ban logout:', err);
+      });
+      if (window.location.pathname !== '/suspended') {
+        window.location.href = '/suspended';
+      }
+      return Promise.reject(error);
+    }
+
     if (error.response?.status === 401) {
       // Clear token and session if backend rejects the credentials
       useAuthStore.getState().clearSession();
