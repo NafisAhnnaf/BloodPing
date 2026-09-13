@@ -218,12 +218,9 @@ export function FeedPage() {
                           </span>
                         </p>
                       ) : (
-                        <div>
-                          <p className="text-4xl font-black">
-                            0 <span className="text-xl font-bold opacity-80">days</span>
-                          </p>
-                          <span className="inline-block mt-1 text-[11px] font-bold text-emerald-100 bg-emerald-700/40 px-2.5 py-0.5 rounded-full border border-emerald-300/30">
-                            Eligible Now
+                        <div className="mt-1 flex justify-center">
+                          <span className="inline-block text-sm font-bold text-emerald-900 bg-emerald-400 px-4 py-2 rounded-xl shadow-md border border-emerald-300">
+                            You are now eligible
                           </span>
                         </div>
                       )}
