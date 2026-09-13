@@ -12,6 +12,7 @@ interface RoleContextType {
   donorApplicationStatus: ApplicationStatus;
   rejectionReason: string | null;
   loadingStatus: boolean;
+  isSwitchingRole: boolean;
   refreshRoleStatus: () => Promise<void>;
   systemRole: string | null;
 }
@@ -25,6 +26,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   const [donorApplicationStatus, setDonorApplicationStatus] = useState<ApplicationStatus>('not_applied');
   const [rejectionReason, setRejectionReason] = useState<string | null>(null);
   const [loadingStatus, setLoadingStatus] = useState(false);
+  const [isSwitchingRole, setIsSwitchingRole] = useState(false);
   const [systemRole, setSystemRole] = useState<string | null>(null);
 
   const refreshRoleStatus = async () => {
@@ -71,14 +73,20 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   }, [isAuthenticated]);
 
   const setRole = async (newRole: Role): Promise<boolean> => {
+    if (newRole === role) return true;
+    const previousRole = role;
+
+    // Optimistically update the UI state immediately
+    setRoleState(newRole);
+    setIsSwitchingRole(true);
     setLoadingStatus(true);
+
     try {
       if (newRole === 'donor') {
         try {
           await apiClient.get('/donors/me');
           setIsDonorApproved(true);
           setDonorApplicationStatus('approved');
-          setRoleState('donor');
           return true;
         } catch (err: any) {
           setIsDonorApproved(false);
@@ -96,24 +104,28 @@ export function RoleProvider({ children }: { children: ReactNode }) {
               setDonorApplicationStatus('not_applied');
             }
           }
-          // Non-approved donors must NOT be set to donor role
-          setRoleState('recipient');
+          // Non-approved donors or error: revert back to previous role
+          setRoleState(previousRole);
           return false;
         }
       } else {
         try {
           await apiClient.get('/recipients/me');
+          return true;
         } catch (err) {
           console.error('Error verifying recipient presence:', err);
+          // Backend request failed: revert back to previous role
+          setRoleState(previousRole);
+          return false;
         }
-        setRoleState('recipient');
-        return true;
       }
     } catch (err) {
       console.error('Error switching role:', err);
-      setRoleState('recipient');
+      // Revert back to previous role
+      setRoleState(previousRole);
       return false;
     } finally {
+      setIsSwitchingRole(false);
       setLoadingStatus(false);
     }
   };
@@ -126,6 +138,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
       donorApplicationStatus, 
       rejectionReason, 
       loadingStatus,
+      isSwitchingRole,
       refreshRoleStatus,
       systemRole
     }}>

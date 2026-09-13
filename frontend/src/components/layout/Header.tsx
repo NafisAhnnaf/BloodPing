@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Bell, ArrowLeft, User, Lock } from 'lucide-react';
+import { Bell, ArrowLeft, User, Lock, Loader2 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useRole } from '../../context/RoleContext';
 import { useNotifications } from '../../context/NotificationContext';
@@ -24,7 +24,7 @@ export function Header({
   const navigate = useNavigate();
   const location = useLocation();
   const currentPath = location.pathname;
-  const { role, setRole, systemRole, isDonorApproved } = useRole();
+  const { role, setRole, systemRole, isDonorApproved, isSwitchingRole } = useRole();
 
   const [showInbox, setShowInbox] = useState(false);
   const inboxRef = useRef<HTMLDivElement>(null);
@@ -101,20 +101,22 @@ export function Header({
 
       {/* RIGHT: Role Toggle & Notifications */}
       <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end">
-        <div className="flex items-center gap-1 bg-white/50 backdrop-blur-md border border-white/60 p-1 rounded-full shadow-sm">
+        <div className="relative flex items-center gap-1 bg-white/50 backdrop-blur-md border border-white/60 p-1 rounded-full shadow-sm">
           <button
             onClick={async () => {
+              if (isSwitchingRole) return;
               if (!isDonorApproved) {
                 navigate('/become-donor');
                 return;
               }
               await setRole('donor');
             }}
+            disabled={isSwitchingRole}
             title={!isDonorApproved ? "You are not a registered donor yet. Click to register." : "Switch to Donor view"}
             className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 ${role === 'donor'
               ? 'bg-red-600 text-white shadow-md'
               : 'text-slate-600 hover:text-slate-900'
-              }`}
+              } ${isSwitchingRole ? 'opacity-80' : ''}`}
           >
             <span>Donor</span>
             {!isDonorApproved && (
@@ -122,15 +124,26 @@ export function Header({
             )}
           </button>
           <button
-            onClick={() => setRole('recipient')}
+            onClick={async () => {
+              if (isSwitchingRole) return;
+              await setRole('recipient');
+            }}
+            disabled={isSwitchingRole}
             title="Switch to Recipient view"
             className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all ${role === 'recipient'
               ? 'bg-red-600 text-white shadow-md'
               : 'text-slate-600 hover:text-slate-900'
-              }`}
+              } ${isSwitchingRole ? 'opacity-80' : ''}`}
           >
             Recipient
           </button>
+
+          {/* Loader overlay over the toggle while switching roles */}
+          {isSwitchingRole && (
+            <div className="absolute inset-0 bg-white/70 backdrop-blur-[1px] rounded-full flex items-center justify-center pointer-events-none z-10 animate-in fade-in duration-150">
+              <Loader2 size={15} className="animate-spin text-red-600" />
+            </div>
+          )}
         </div>
 
         {showNotification && (
