@@ -4,7 +4,7 @@ import {
   ShieldCheck, LogOut, FileText, Users, Search, Filter,
   ArrowUpDown, CheckCircle, XCircle, AlertTriangle, ExternalLink,
   ChevronLeft, ChevronRight, RefreshCw, X, ShieldAlert, UserX, UserCheck,
-  Compass, Clock, Mail, Droplet, ArrowLeft
+  Compass, Clock, Mail, Droplet, ArrowLeft, UserMinus
 } from 'lucide-react';
 import adminService, { DonorApplication, AdminUserItem } from '../../services/adminService';
 
@@ -42,6 +42,11 @@ export function AdminDashboard() {
   const [banningUser, setBanningUser] = useState<AdminUserItem | null>(null);
   const [banReason, setBanReason] = useState('');
   const [unbanningUser, setUnbanningUser] = useState<AdminUserItem | null>(null);
+
+  // Role Removal Modal State
+  const [removingRoleData, setRemovingRoleData] = useState<{ user: AdminUserItem; role: 'donor' | 'recipient' } | null>(null);
+  const [roleRemovalReason, setRoleRemovalReason] = useState('');
+  const [roleRemoving, setRoleRemoving] = useState(false);
 
   // Auth check
   useEffect(() => {
@@ -154,6 +159,25 @@ export function AdminDashboard() {
       loadUsers();
     } catch (err: any) {
       alert(err.response?.data?.detail || 'Failed to unban user.');
+    }
+  };
+
+  const handleConfirmRoleRemoval = async () => {
+    if (!removingRoleData) return;
+    setRoleRemoving(true);
+    try {
+      if (removingRoleData.role === 'donor') {
+        await adminService.removeDonorRole(removingRoleData.user.id, roleRemovalReason);
+      } else {
+        await adminService.removeRecipientRole(removingRoleData.user.id, roleRemovalReason);
+      }
+      setRemovingRoleData(null);
+      setRoleRemovalReason('');
+      loadUsers();
+    } catch (err: any) {
+      alert(err.response?.data?.detail || `Failed to remove ${removingRoleData.role} role.`);
+    } finally {
+      setRoleRemoving(false);
     }
   };
 
@@ -581,24 +605,57 @@ export function AdminDashboard() {
                           </td>
 
                           <td className="px-6 py-4 text-right">
-                            {u.is_banned ? (
-                              <button
-                                onClick={() => setUnbanningUser(u)}
-                                className="px-3.5 py-1.5 rounded-xl bg-white hover:bg-emerald-50 text-emerald-600 border border-emerald-200 font-black transition-all text-xs shadow-sm active:scale-98"
-                              >
-                                Unban Account
-                              </button>
-                            ) : (
-                              <button
-                                onClick={() => {
-                                  setBanningUser(u);
-                                  setBanReason('');
-                                }}
-                                className="px-3.5 py-1.5 rounded-xl bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 font-black transition-all text-xs shadow-sm active:scale-98"
-                              >
-                                Ban Account
-                              </button>
-                            )}
+                            <div className="flex items-center justify-end gap-2 flex-wrap">
+                              {/* Remove as Donor button */}
+                              {!u.is_banned && (userFilter === 'donors' || (userFilter !== 'recipients' && u.roles.includes('donor'))) && (
+                                <button
+                                  onClick={() => {
+                                    setRemovingRoleData({ user: u, role: 'donor' });
+                                    setRoleRemovalReason('');
+                                  }}
+                                  title="Revoke donor privileges"
+                                  className="px-3 py-1.5 rounded-xl bg-white hover:bg-amber-50 text-amber-700 border border-amber-300 font-black transition-all text-xs shadow-sm active:scale-98 flex items-center gap-1.5"
+                                >
+                                  <UserMinus className="w-3.5 h-3.5 text-amber-600" />
+                                  Remove as Donor
+                                </button>
+                              )}
+
+                              {/* Remove as Recipient button */}
+                              {!u.is_banned && (userFilter === 'recipients' || (userFilter !== 'donors' && u.roles.includes('recipient'))) && (
+                                <button
+                                  onClick={() => {
+                                    setRemovingRoleData({ user: u, role: 'recipient' });
+                                    setRoleRemovalReason('');
+                                  }}
+                                  title="Revoke recipient privileges"
+                                  className="px-3 py-1.5 rounded-xl bg-white hover:bg-amber-50 text-amber-700 border border-amber-300 font-black transition-all text-xs shadow-sm active:scale-98 flex items-center gap-1.5"
+                                >
+                                  <UserMinus className="w-3.5 h-3.5 text-amber-600" />
+                                  Remove as Recipient
+                                </button>
+                              )}
+
+                              {/* Ban / Unban Account */}
+                              {u.is_banned ? (
+                                <button
+                                  onClick={() => setUnbanningUser(u)}
+                                  className="px-3.5 py-1.5 rounded-xl bg-white hover:bg-emerald-50 text-emerald-600 border border-emerald-200 font-black transition-all text-xs shadow-sm active:scale-98"
+                                >
+                                  Unban Account
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => {
+                                    setBanningUser(u);
+                                    setBanReason('');
+                                  }}
+                                  className="px-3.5 py-1.5 rounded-xl bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 font-black transition-all text-xs shadow-sm active:scale-98"
+                                >
+                                  Ban Account
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -828,6 +885,83 @@ export function AdminDashboard() {
                 className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white text-xs font-black shadow-md shadow-emerald-600/20 active:scale-98 transition-all"
               >
                 Confirm Restore
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Role Removal Modal */}
+      {removingRoleData && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-white/95 border border-white/80 rounded-3xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
+                <UserMinus className="w-5 h-5 text-amber-600" />
+                Remove {removingRoleData.role === 'donor' ? 'Donor' : 'Recipient'} Privileges
+              </h3>
+              <button
+                onClick={() => setRemovingRoleData(null)}
+                className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center font-bold text-sm">
+                {removingRoleData.user.full_name ? removingRoleData.user.full_name[0].toUpperCase() : 'U'}
+              </div>
+              <div>
+                <p className="text-xs font-bold text-slate-900">{removingRoleData.user.full_name || 'Anonymous'}</p>
+                <p className="text-[10px] font-semibold text-slate-400">{removingRoleData.user.email} (@{removingRoleData.user.username})</p>
+              </div>
+            </div>
+
+            <p className="text-xs font-semibold text-slate-600 leading-relaxed">
+              {removingRoleData.role === 'donor'
+                ? 'This will deactivate their donor profile, remove them from donor matching, and revoke donor capabilities. Their account and past donation history will remain intact.'
+                : 'This will freeze their recipient privileges and prevent them from creating new blood requests. Their account and past requests will remain intact.'}
+            </p>
+
+            <div>
+              <label className="block text-[11px] font-black uppercase tracking-wider text-slate-500 mb-1.5">
+                Reason for Revocation (Sent via notification)
+              </label>
+              <textarea
+                rows={3}
+                value={roleRemovalReason}
+                onChange={(e) => setRoleRemovalReason(e.target.value)}
+                placeholder={
+                  removingRoleData.role === 'donor'
+                    ? 'e.g. Ineligible medical report, failed verification, repeated cancellation...'
+                    : 'e.g. Fraudulent blood request, policy violation...'
+                }
+                className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl p-3 text-xs font-bold text-slate-900 placeholder-slate-400 focus:outline-none focus:border-amber-500 transition-all"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setRemovingRoleData(null)}
+                disabled={roleRemoving}
+                className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={roleRemoving}
+                onClick={handleConfirmRoleRemoval}
+                className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-black shadow-md shadow-amber-600/20 active:scale-98 transition-all flex items-center gap-1.5"
+              >
+                {roleRemoving ? (
+                  <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <UserMinus className="w-3.5 h-3.5" />
+                )}
+                Confirm Removal
               </button>
             </div>
           </div>

@@ -66,8 +66,22 @@ export function RequestCard({ request }: RequestCardProps) {
   const timeAgoText = formatTimeAgo(request.date);
   const deadlineDate = new Date(request.deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 
-  const hasApplied = request.applications.some(app => app.donorId === currentUser.id);
-  const userApp = request.applications.find(app => app.donorId === currentUser.id);
+  const hasApplied = request.applications.some(app => 
+    String(app.donorId) === String(currentUser?.id) ||
+    (authUser && String(app.donorId) === String(authUser.id)) ||
+    (app.donorUserId && String(app.donorUserId) === String(currentUser?.id)) ||
+    (app.donorUserId && authUser && String(app.donorUserId) === String(authUser.id)) ||
+    (app.donorProfileId && String(app.donorProfileId) === String(currentUser?.id)) ||
+    (app.donorProfileId && authUser && String(app.donorProfileId) === String(authUser.id))
+  );
+  const userApp = request.applications.find(app => 
+    String(app.donorId) === String(currentUser?.id) ||
+    (authUser && String(app.donorId) === String(authUser.id)) ||
+    (app.donorUserId && String(app.donorUserId) === String(currentUser?.id)) ||
+    (app.donorUserId && authUser && String(app.donorUserId) === String(authUser.id)) ||
+    (app.donorProfileId && String(app.donorProfileId) === String(currentUser?.id)) ||
+    (app.donorProfileId && authUser && String(app.donorProfileId) === String(authUser.id))
+  );
 
   return (
     <div className="bg-white/40 backdrop-blur-xl border border-white/50 rounded-3xl p-5 flex flex-col gap-4 shadow-lg hover:shadow-2xl hover:-translate-y-1 hover:bg-white/50 transition-all duration-300">

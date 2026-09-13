@@ -23,10 +23,18 @@ export function HistoryPage() {
 
     // Filter by role & user involvement
     if (role === 'donor') {
-      result = result.filter(req => req.applications.some(app => app.donorId === user?.id));
+      result = result.filter(req => req.applications.some(app => 
+        String(app.donorId) === String(user?.id) ||
+        (app.donorUserId && String(app.donorUserId) === String(user?.id)) ||
+        (app.donorProfileId && String(app.donorProfileId) === String(user?.id))
+      ));
     } else {
       // Recipient
-      result = result.filter(req => req.authorName === user?.name);
+      result = result.filter(req => 
+        req.isOwner || 
+        (user?.id && (String(req.recipientUserId) === String(user.id) || String(req.ownerId) === String(user.id))) ||
+        req.authorName === user?.name
+      );
     }
 
     // Search filter

@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from app.database import get_db_connection
 from fastapi import HTTPException, status
 
@@ -7,17 +7,28 @@ logger = logging.getLogger(__name__)
 
 class MatchService:
     @staticmethod
-    def apply_to_request(request_id: str, donor_id: str, user_id: str) -> str:
+    def apply_to_request(request_id: str, donor_id: Optional[str], user_id: str) -> str:
         with get_db_connection() as db:
             with db.cursor() as cursor:
                 try:
-                    # 1. Verify donor belongs to caller
-                    cursor.execute("SELECT id FROM public.donors WHERE id = %s AND user_id = %s;", (donor_id, user_id))
-                    if not cursor.fetchone():
+                    # 1. Verify donor belongs to caller (accept either donors.id or user_id, or resolve by user_id)
+                    if donor_id:
+                        cursor.execute(
+                            "SELECT id FROM public.donors WHERE (id::text = %s OR user_id::text = %s) AND user_id = %s;",
+                            (str(donor_id), str(donor_id), user_id)
+                        )
+                    else:
+                        cursor.execute(
+                            "SELECT id FROM public.donors WHERE user_id = %s;",
+                            (user_id,)
+                        )
+                    donor_row = cursor.fetchone()
+                    if not donor_row:
                         raise HTTPException(
                             status_code=status.HTTP_403_FORBIDDEN,
-                            detail="Donor profile does not belong to authenticated user."
+                            detail="Donor profile not found for authenticated user. Please become a donor first."
                         )
+                    actual_donor_id = donor_row["id"]
 
                     # 2. Verify caller is not applying to their own request
                     cursor.execute(
@@ -36,10 +47,11 @@ class MatchService:
                         )
 
                     cursor.execute(
-                        "SELECT public.apply_to_donation_request(%s, %s);",
-                        (request_id, donor_id),
+                        "SELECT (public.apply_to_donation_request(%s, %s)).id AS match_id;",
+                        (request_id, actual_donor_id),
                     )
-                    match_id = cursor.fetchone()[0]
+                    row = cursor.fetchone()
+                    match_id = row["match_id"] if row else None
                     db.commit()
                     return str(match_id)
                 except HTTPException:
@@ -167,9 +179,16 @@ class MatchService:
                             detail="You do not have permission to manage this applicant."
                         )
 
+                    status_map = {
+                        "completed": "confirmed",
+                        "canceled": "withdrawn",
+                        "cancelled": "withdrawn"
+                    }
+                    normalized_status = status_map.get(str(new_status).lower(), str(new_status).lower())
+
                     cursor.execute(
-                        "SELECT public.update_match_status(%s, %s::public.match_status, %s);",
-                        (match_id, new_status, note),
+                        "SELECT public.update_match_status(%s, %s::text, %s);",
+                        (match_id, normalized_status, note),
                     )
                     db.commit()
                 except HTTPException:
@@ -237,10 +256,13 @@ class MatchService:
                         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Match not found")
                     if str(row["user_id"]) != str(user_id):
                         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can only withdraw your own application.")
-                    if row["status"] != "pending":
-                        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Can only withdraw pending applications")
+                    if row["status"] == "pending":
+                        cursor.execute("DELETE FROM public.donation_matches WHERE id = %s", (match_id,))
+                    elif row["status"] == "accepted":
+                        cursor.execute("SELECT public.update_match_status_with_points(%s, 'withdrawn', 'Donor withdrew accepted application');", (match_id,))
+                    else:
+                        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Cannot withdraw a match with status '{row['status']}'")
                     
-                    cursor.execute("DELETE FROM public.donation_matches WHERE id = %s", (match_id,))
                     db.commit()
                 except HTTPException:
                     db.rollback()

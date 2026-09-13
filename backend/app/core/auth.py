@@ -25,7 +25,7 @@ def require_donor(request: Request) -> str:
     from app.database import get_db_connection
     with get_db_connection() as db:
         with db.cursor() as cursor:
-            cursor.execute("SELECT 1 FROM public.donors WHERE user_id = %s;", (user_id,))
+            cursor.execute("SELECT 1 FROM public.donors WHERE user_id = %s AND is_active IS TRUE;", (user_id,))
             if not cursor.fetchone():
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
@@ -43,7 +43,7 @@ def require_recipient(request: Request) -> str:
     from app.database import get_db_connection
     with get_db_connection() as db:
         with db.cursor() as cursor:
-            cursor.execute("SELECT 1 FROM public.recipients WHERE user_id = %s;", (user_id,))
+            cursor.execute("SELECT 1 FROM public.recipients WHERE user_id = %s AND is_active IS TRUE;", (user_id,))
             if not cursor.fetchone():
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,

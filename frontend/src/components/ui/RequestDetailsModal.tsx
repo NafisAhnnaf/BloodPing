@@ -15,19 +15,31 @@ export function RequestDetailsModal({ request, onClose }: RequestDetailsModalPro
   const [showConfirm, setShowConfirm] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
 
-  const handleApply = () => {
-    applyToRequest(request.id);
-    setShowConfirm(false);
-    onClose();
+  const handleApply = async () => {
+    try {
+      await applyToRequest(request.id);
+      setShowConfirm(false);
+      onClose();
+    } catch (e) {
+      // alert handled in applyToRequest
+    }
   };
 
-  const handleCancelApplication = (reason: string) => {
-    cancelApplication(request.id, reason);
-    setShowCancelModal(false);
-    onClose();
+  const handleCancelApplication = async (reason: string) => {
+    try {
+      await cancelApplication(request.id, reason);
+      setShowCancelModal(false);
+      onClose();
+    } catch (e) {
+      // alert handled in cancelApplication
+    }
   };
 
-  const myApp = request.applications.find(app => app.donorId === currentUser.id);
+  const myApp = request.applications.find(app => 
+    String(app.donorId) === String(currentUser?.id) ||
+    (app.donorUserId && String(app.donorUserId) === String(currentUser?.id)) ||
+    (app.donorProfileId && String(app.donorProfileId) === String(currentUser?.id))
+  );
   const hasApplied = !!myApp;
   const isCancellable = myApp && (myApp.status === 'pending' || myApp.status === 'accepted');
 

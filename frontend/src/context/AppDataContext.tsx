@@ -7,12 +7,22 @@ import { sessionService } from '../services/sessionService';
 import { requestService } from '../services/requestService';
 
 export type RequestStatus = 'open' | 'pending' | 'completed' | 'canceled' | 'cancelled' | 'in_progress' | 'fulfilled' | 'expired';
-export type ApplicationStatus = 'pending' | 'accepted' | 'completed' | 'rejected' | 'canceled';
+export type ApplicationStatus = 'pending' | 'accepted' | 'completed' | 'rejected' | 'canceled' | 'confirmed' | 'withdrawn' | 'no_show';
 
 export interface Application {
-  donorId: number;
+  id?: string;
+  matchId?: string;
+  donorId: string | number;
+  donorUserId?: string;
+  donorProfileId?: string;
   status: ApplicationStatus;
   cancelReason?: string;
+  donorName?: string;
+  donorPhone?: string;
+  bloodGroup?: string;
+  appliedAt?: string;
+  acceptedAt?: string;
+  confirmedAt?: string;
 }
 
 export interface NotificationItem {
@@ -74,12 +84,12 @@ interface AppDataContextType {
   login: (credentials: any, isDemo?: boolean) => Promise<void>;
   signup: (formData: any) => Promise<void>;
   logout: () => Promise<void>;
-  applyToRequest: (reqId: string | number) => void;
+  applyToRequest: (reqId: string | number) => Promise<void> | void;
   createRequest: (req: Omit<BloodRequest, 'id' | 'date' | 'status' | 'unitsFulfilled' | 'applicants' | 'applications'>) => Promise<void> | void;
   updateRequest: (reqId: string | number, reqData: Partial<BloodRequest>) => Promise<void> | void;
   deleteRequest: (reqId: string | number) => Promise<void> | void;
-  updateApplicationStatus: (reqId: string | number, donorId: number, newStatus: ApplicationStatus) => void;
-  cancelApplication: (reqId: string | number, reason: string) => void;
+  updateApplicationStatus: (reqId: string | number, donorId: number | string, newStatus: ApplicationStatus) => Promise<void> | void;
+  cancelApplication: (reqId: string | number, reason: string) => Promise<void> | void;
   notifications: NotificationItem[];
   addNotification: (notif: Omit<NotificationItem, 'id' | 'timestamp' | 'read'>) => void;
   markNotificationsRead: () => void;
@@ -150,8 +160,22 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
           urgent: req.is_urgent || false,
           date: req.created_at,
           deadline: req.required_by,
-          applicants: 0,
-          applications: [],
+          applicants: req.applicants || (Array.isArray(req.applications) ? req.applications.length : 0),
+          applications: Array.isArray(req.applications) ? req.applications.map((app: any) => ({
+            id: app.id || app.matchId,
+            matchId: app.matchId || app.id,
+            donorId: app.donorId || app.donorUserId,
+            donorUserId: app.donorUserId || app.donorId,
+            donorProfileId: app.donorProfileId,
+            donorName: app.donorName,
+            donorPhone: app.donorPhone,
+            bloodGroup: app.bloodGroup,
+            status: app.status === 'confirmed' ? 'completed' : (app.status === 'withdrawn' ? 'canceled' : app.status),
+            cancelReason: app.recipient_verification_note,
+            appliedAt: app.appliedAt,
+            acceptedAt: app.acceptedAt,
+            confirmedAt: app.confirmedAt
+          })) : [],
           status: req.status
         }));
         setRequests(dbRequests);
@@ -257,25 +281,28 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
   };
 
-  const applyToRequest = (reqId: string | number) => {
-    setRequests(prev => prev.map(req => {
-      if (req.id === reqId) {
-        // Prevent duplicate applications
-        if (req.applications.some(app => app.donorId === currentUser.id)) return req;
-        
+  const applyToRequest = async (reqId: string | number) => {
+    try {
+      const authUserId = useAuthStore.getState().session?.user?.id;
+      const donorIdParam = authUserId ? String(authUserId) : undefined;
+      
+      const response = await apiClient.post(`/matches/${reqId}/apply`, {
+        donor_id: donorIdParam
+      });
+      
+      if (response.data && response.data.success) {
+        await fetchRequests();
         addNotification({
           recipientId: 'recipient',
-          message: `Donor ${currentUser.name} has applied to your request at ${req.hospital}.`
+          message: `Successfully applied to donation request.`
         });
-
-        return { 
-          ...req, 
-          applicants: req.applicants + 1,
-          applications: [...req.applications, { donorId: currentUser.id, status: 'pending' }]
-        };
       }
-      return req;
-    }));
+    } catch (err: any) {
+      console.error('Failed to apply to request:', err);
+      const msg = err.response?.data?.detail || err.message || 'Failed to apply to donation request.';
+      alert(msg);
+      throw err;
+    }
   };
 
   const createRequest = async (reqData: Omit<BloodRequest, 'id' | 'date' | 'status' | 'unitsFulfilled' | 'applicants' | 'applications'>) => {
@@ -343,82 +370,74 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const updateApplicationStatus = (reqId: string | number, donorId: number, newStatus: ApplicationStatus) => {
-    setRequests(prev => prev.map(req => {
-      if (req.id === reqId) {
-        let newUnitsFulfilled = req.unitsFulfilled;
-        let newReqStatus = req.status;
-        
-        const updatedApps = req.applications.map(app => {
-          if (app.donorId === donorId && app.status !== newStatus) {
-            if (app.status !== 'completed' && newStatus === 'completed') {
-              newUnitsFulfilled += 1;
-              
-              // Also update the donor's units globally (leaderboard)
-              setDonors(prevDonors => prevDonors.map(d => 
-                d.id === donorId ? { ...d, units: d.units + 10 } : d
-              ));
+  const updateApplicationStatus = async (reqId: string | number, donorIdOrMatchId: number | string, newStatus: ApplicationStatus) => {
+    try {
+      const req = requests.find(r => String(r.id) === String(reqId));
+      const app = req?.applications.find(a => 
+        String(a.matchId) === String(donorIdOrMatchId) ||
+        String(a.id) === String(donorIdOrMatchId) ||
+        String(a.donorId) === String(donorIdOrMatchId) ||
+        String(a.donorUserId) === String(donorIdOrMatchId) ||
+        String(a.donorProfileId) === String(donorIdOrMatchId)
+      );
+      
+      const matchId = app?.matchId || app?.id || (typeof donorIdOrMatchId === 'string' && donorIdOrMatchId.length > 20 ? donorIdOrMatchId : null);
 
-              addNotification({
-                recipientId: donorId,
-                message: `Your donation at ${req.hospital} was marked as completed. You earned 10 points!`
-              });
-            } else if (newStatus === 'accepted') {
-              addNotification({
-                recipientId: donorId,
-                message: `Your application to donate at ${req.hospital} has been accepted.`
-              });
-            } else if (newStatus === 'rejected') {
-              addNotification({
-                recipientId: donorId,
-                message: `Your application to donate at ${req.hospital} was not selected this time.`
-              });
-            } else if (newStatus === 'canceled') {
-              addNotification({
-                recipientId: donorId,
-                message: `Your acceptance to donate at ${req.hospital} has been canceled by the recipient. No points were deducted.`
-              });
-            }
-          }
-          return app.donorId === donorId ? { ...app, status: newStatus } : app;
-        });
-
-        if (newUnitsFulfilled >= req.unitsRequired) {
-          newReqStatus = 'completed';
-        }
-
-        return { ...req, applications: updatedApps, unitsFulfilled: newUnitsFulfilled, status: newReqStatus };
+      if (!matchId) {
+        throw new Error("Unable to identify match ID for application.");
       }
-      return req;
-    }));
+
+      if (newStatus === 'completed' || newStatus === 'confirmed') {
+        await apiClient.post(`/matches/${matchId}/confirm-donation`);
+      } else {
+        const backendStatus = newStatus === 'canceled' ? 'withdrawn' : newStatus;
+        await apiClient.put(`/matches/${matchId}/status`, {
+          status: backendStatus
+        });
+      }
+
+      await fetchRequests();
+
+      addNotification({
+        recipientId: app?.donorId || donorIdOrMatchId,
+        message: `Application status updated to ${newStatus}.`
+      });
+    } catch (err: any) {
+      console.error('Failed to update application status:', err);
+      const msg = err.response?.data?.detail || err.message || 'Failed to update application status.';
+      alert(msg);
+      throw err;
+    }
   };
 
-  const cancelApplication = (reqId: string | number, reason: string) => {
-    setRequests(prev => prev.map(req => {
-      if (req.id === reqId) {
-        const app = req.applications.find(a => a.donorId === currentUser.id);
-        if (app && app.status === 'accepted') {
-          // Deduct 5 points
-          setDonors(prevDonors => prevDonors.map(d => 
-            d.id === currentUser.id ? { ...d, units: Math.max(0, d.units - 5) } : d
-          ));
-        }
+  const cancelApplication = async (reqId: string | number, reason: string) => {
+    try {
+      const authUserId = useAuthStore.getState().session?.user?.id;
+      const req = requests.find(r => String(r.id) === String(reqId));
+      const app = req?.applications.find(a => 
+        String(a.donorId) === String(authUserId) ||
+        String(a.donorUserId) === String(authUserId) ||
+        (user && String(a.donorId) === String(user.id))
+      );
 
-        // Add Notification
-        addNotification({
-          recipientId: 'recipient', // Send to the recipient side
-          message: `Donor ${currentUser.name} canceled their application for ${req.hospital}. Reason: ${reason}`
-        });
-
-        return {
-          ...req,
-          applications: req.applications.map(a => 
-            a.donorId === currentUser.id ? { ...a, status: 'canceled' as ApplicationStatus, cancelReason: reason } : a
-          )
-        };
+      const matchId = app?.matchId || app?.id;
+      if (!matchId) {
+        throw new Error("Application match not found.");
       }
-      return req;
-    }));
+
+      await apiClient.delete(`/matches/${matchId}/withdraw`);
+      await fetchRequests();
+
+      addNotification({
+        recipientId: 'recipient',
+        message: `Your application for ${req?.hospital || 'the hospital'} was withdrawn. Reason: ${reason}`
+      });
+    } catch (err: any) {
+      console.error('Failed to cancel application:', err);
+      const msg = err.response?.data?.detail || err.message || 'Failed to withdraw application.';
+      alert(msg);
+      throw err;
+    }
   };
 
   return (

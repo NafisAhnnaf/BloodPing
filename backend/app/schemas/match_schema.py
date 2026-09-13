@@ -3,7 +3,7 @@ from typing import Optional, Dict, Any
 
 
 class MatchApplyRequest(BaseModel):
-    donor_id: str
+    donor_id: Optional[str] = None
 
 
 class MatchStatusUpdate(BaseModel):

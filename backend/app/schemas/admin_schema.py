@@ -16,6 +16,10 @@ class BanUserRequest(BaseModel):
     reason: str = Field(..., min_length=1, description="Detailed reason for suspending the user account")
 
 
+class RoleRemovalRequest(BaseModel):
+    reason: Optional[str] = Field(None, description="Optional reason for revoking the role")
+
+
 class AdminApiResponse(BaseModel):
     success: bool = True
     payload: Optional[Any] = None

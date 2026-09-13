@@ -18,7 +18,7 @@ export function ManageRequestModal({ request, onClose }: ManageRequestModalProps
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [expandedDonorId, setExpandedDonorId] = useState<number | null>(null);
+  const [expandedDonorId, setExpandedDonorId] = useState<string | number | null>(null);
 
   const isOwner = Boolean(
     request.isOwner ?? 
@@ -31,7 +31,7 @@ export function ManageRequestModal({ request, onClose }: ManageRequestModalProps
   const [unitsInput, setUnitsInput] = useState<string>(request.unitsRequired.toString());
 
   const [confirmAction, setConfirmAction] = useState<{
-    donorId: number;
+    donorId: string | number;
     status: ApplicationStatus;
     title: string;
     message: string;
@@ -110,7 +110,7 @@ export function ManageRequestModal({ request, onClose }: ManageRequestModalProps
     }
   };
 
-  const handleActionClick = (donorId: number, status: ApplicationStatus) => {
+  const handleActionClick = (donorId: string | number, status: ApplicationStatus) => {
     if (status === 'accepted') {
       setConfirmAction({
         donorId, status,
@@ -138,9 +138,9 @@ export function ManageRequestModal({ request, onClose }: ManageRequestModalProps
     }
   };
 
-  const confirmPendingAction = () => {
+  const confirmPendingAction = async () => {
     if (confirmAction) {
-      updateApplicationStatus(request.id, confirmAction.donorId, confirmAction.status);
+      await updateApplicationStatus(request.id, confirmAction.donorId, confirmAction.status);
       setConfirmAction(null);
     }
   };
@@ -367,8 +367,13 @@ export function ManageRequestModal({ request, onClose }: ManageRequestModalProps
               </div>
             ) : (
               request.applications.map((app, idx) => {
-                const donor = donors.find(d => d.id === app.donorId);
-                if (!donor) return null;
+                const donor = donors.find(d => String(d.id) === String(app.donorId)) || {
+                  id: (app.matchId || app.donorId) as any,
+                  name: app.donorName || 'Donor',
+                  bloodType: app.bloodGroup || 'O+',
+                  phone: app.donorPhone || '',
+                  units: 0
+                };
 
                 const isExpanded = expandedDonorId === donor.id;
 
