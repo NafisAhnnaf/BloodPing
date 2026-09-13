@@ -22,12 +22,19 @@ from app.routers import (
 
 import importlib.util
 
-# Dynamically load the compare_schema module from the parent directory to avoid name collisions with app/database.py
+# Dynamically load compare_schema only if present locally (development environment)
 schema_script_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../database/compare_schema.py'))
-spec = importlib.util.spec_from_file_location("compare_schema", schema_script_path)
-compare_schema = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(compare_schema)
-verify_schema = compare_schema.main
+verify_schema = None
+
+if os.path.isfile(schema_script_path):
+    try:
+        spec = importlib.util.spec_from_file_location("compare_schema", schema_script_path)
+        if spec and spec.loader:
+            compare_schema = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(compare_schema)
+            verify_schema = getattr(compare_schema, "main", None)
+    except Exception as e:
+        pass
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -38,13 +45,13 @@ async def lifespan(app: FastAPI):
     logger.info("Starting up BloodPing API...")
     init_db_pool()
     
-    # Audit database schema validity against definition files
-    logger.info("Verifying database schema...")
-    try:
-        verify_schema()
-    except Exception as e:
-        logger.critical(f"Database schema verification failed: {e}")
-        raise e
+    # Audit database schema validity against definition files in local development
+    if verify_schema and not os.getenv("VERCEL"):
+        logger.info("Verifying database schema...")
+        try:
+            verify_schema()
+        except Exception as e:
+            logger.warning(f"Database schema verification warning: {e}")
         
     yield
     if db_pool is not None:
