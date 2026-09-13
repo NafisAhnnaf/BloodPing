@@ -514,6 +514,24 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         throw new Error("Unable to identify match ID for application.");
       }
 
+      // Optimistic update for immediate visual feedback in UI
+      setRequests(prev => prev.map(r => {
+        if (String(r.id) !== String(reqId)) return r;
+        return {
+          ...r,
+          applications: r.applications.map(a => {
+            const isMatch = String(a.matchId) === String(matchId) ||
+              String(a.id) === String(matchId) ||
+              String(a.donorId) === String(donorIdOrMatchId);
+            if (!isMatch) return a;
+            return {
+              ...a,
+              status: newStatus
+            };
+          })
+        };
+      }));
+
       if (newStatus === 'completed' || newStatus === 'confirmed') {
         await apiClient.post(`/matches/${matchId}/confirm-donation`);
       } else {

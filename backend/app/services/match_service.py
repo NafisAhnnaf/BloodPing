@@ -263,37 +263,37 @@ class MatchService:
                         "SELECT public.update_match_status(%s, %s::text, %s);",
                         (match_id, normalized_status, note),
                     )
+                    db.commit()
 
                     if normalized_status == "accepted":
                         try:
-                            cursor.execute(
-                                """
-                                SELECT d.user_id AS donor_user_id, dp.full_name AS donor_name, dau.email AS donor_email,
-                                       dr.hospital_name, rp.full_name AS recipient_name, rp.phone_number
-                                FROM public.donation_matches m
-                                JOIN public.donors d ON m.donor_id = d.id
-                                JOIN public.profiles dp ON dp.id = d.user_id
-                                JOIN auth.users dau ON dau.id = d.user_id
-                                JOIN public.donation_requests dr ON m.request_id = dr.id
-                                JOIN public.recipients r ON dr.recipient_id = r.id
-                                JOIN public.profiles rp ON rp.id = r.user_id
-                                WHERE m.id = %s;
-                                """,
-                                (match_id,)
-                            )
-                            d_info = cursor.fetchone()
-                            if d_info and d_info.get("donor_email"):
-                                EmailService.send_match_accepted_to_donor(
-                                    to_email=d_info["donor_email"],
-                                    donor_name=d_info.get("donor_name") or "Donor",
-                                    recipient_name=d_info.get("recipient_name") or "Recipient",
-                                    hospital_name=d_info.get("hospital_name") or "the designated hospital",
-                                    contact_number=d_info.get("phone_number")
+                            with db.cursor() as email_cursor:
+                                email_cursor.execute(
+                                    """
+                                    SELECT d.user_id AS donor_user_id, dp.full_name AS donor_name, dau.email AS donor_email,
+                                           dr.hospital_name, rp.full_name AS recipient_name, rp.phone AS recipient_phone
+                                    FROM public.donation_matches m
+                                    JOIN public.donors d ON m.donor_id = d.id
+                                    JOIN public.profiles dp ON dp.id = d.user_id
+                                    JOIN auth.users dau ON dau.id = d.user_id
+                                    JOIN public.donation_requests dr ON m.request_id = dr.id
+                                    JOIN public.recipients r ON dr.recipient_id = r.id
+                                    JOIN public.profiles rp ON rp.id = r.user_id
+                                    WHERE m.id = %s;
+                                    """,
+                                    (match_id,)
                                 )
+                                d_info = email_cursor.fetchone()
+                                if d_info and d_info.get("donor_email"):
+                                    EmailService.send_match_accepted_to_donor(
+                                        to_email=d_info["donor_email"],
+                                        donor_name=d_info.get("donor_name") or "Donor",
+                                        recipient_name=d_info.get("recipient_name") or "Recipient",
+                                        hospital_name=d_info.get("hospital_name") or "the designated hospital",
+                                        contact_number=d_info.get("recipient_phone")
+                                    )
                         except Exception as d_email_err:
                             logger.warning(f"Failed to send match accepted email to donor: {d_email_err}")
-
-                    db.commit()
                 except HTTPException:
                     db.rollback()
                     raise
