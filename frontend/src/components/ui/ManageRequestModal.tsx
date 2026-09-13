@@ -12,7 +12,8 @@ interface ManageRequestModalProps {
 }
 
 export function ManageRequestModal({ request, onClose }: ManageRequestModalProps) {
-  const { updateApplicationStatus, updateRequest, deleteRequest, donors } = useAppData();
+  const { requests, updateApplicationStatus, updateRequest, deleteRequest, donors } = useAppData();
+  const liveRequest = requests.find(r => String(r.id) === String(request.id)) || request;
   const authUser = useAuthStore(state => state.session?.user);
   const [isEditing, setIsEditing] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -21,14 +22,14 @@ export function ManageRequestModal({ request, onClose }: ManageRequestModalProps
   const [expandedDonorId, setExpandedDonorId] = useState<string | number | null>(null);
 
   const isOwner = Boolean(
-    request.isOwner ?? 
+    liveRequest.isOwner ?? 
     (authUser && (
-      (request.recipientUserId && String(request.recipientUserId) === String(authUser.id)) || 
-      (request.ownerId && String(request.ownerId) === String(authUser.id))
+      (liveRequest.recipientUserId && String(liveRequest.recipientUserId) === String(authUser.id)) || 
+      (liveRequest.ownerId && String(liveRequest.ownerId) === String(authUser.id))
     ))
   );
 
-  const [unitsInput, setUnitsInput] = useState<string>(request.unitsRequired.toString());
+  const [unitsInput, setUnitsInput] = useState<string>(liveRequest.unitsRequired.toString());
 
   const [confirmAction, setConfirmAction] = useState<{
     donorId: string | number;
@@ -38,15 +39,15 @@ export function ManageRequestModal({ request, onClose }: ManageRequestModalProps
   } | null>(null);
 
   const [editForm, setEditForm] = useState<Partial<BloodRequest>>({
-    unitsRequired: request.unitsRequired,
-    hospital: request.hospital,
-    address: request.address || '',
-    ward: request.ward || '',
-    description: request.description,
-    urgent: request.urgent,
-    contact: { ...request.contact } as any,
-    preferredDistance: request.preferredDistance || 5,
-    deadline: request.deadline ? request.deadline.split('T')[0] : '',
+    unitsRequired: liveRequest.unitsRequired,
+    hospital: liveRequest.hospital,
+    address: liveRequest.address || '',
+    ward: liveRequest.ward || '',
+    description: liveRequest.description,
+    urgent: liveRequest.urgent,
+    contact: { ...liveRequest.contact } as any,
+    preferredDistance: liveRequest.preferredDistance || 5,
+    deadline: liveRequest.deadline ? liveRequest.deadline.split('T')[0] : '',
   });
 
   if (!isOwner) {
@@ -70,10 +71,12 @@ export function ManageRequestModal({ request, onClose }: ManageRequestModalProps
       const parsedUnits = parseInt(unitsInput);
       const deadlineIso = editForm.deadline 
         ? (editForm.deadline.includes('T') ? editForm.deadline : new Date(`${editForm.deadline}T23:59:59`).toISOString())
-        : request.deadline;
+        : liveRequest.deadline;
 
-      await updateRequest(request.id, {
+      await updateRequest(liveRequest.id, {
         ...editForm,
+        hospitalLat: liveRequest.hospitalLat,
+        hospitalLng: liveRequest.hospitalLng,
         unitsRequired: isNaN(parsedUnits) || parsedUnits < 1 ? 1 : parsedUnits,
         deadline: deadlineIso,
       });
@@ -100,7 +103,7 @@ export function ManageRequestModal({ request, onClose }: ManageRequestModalProps
     try {
       setIsSubmitting(true);
       setErrorMessage(null);
-      await deleteRequest(request.id);
+      await deleteRequest(liveRequest.id);
       onClose();
     } catch (err: any) {
       const msg = err.response?.data?.detail || err.message || 'Failed to delete donation request.';
@@ -140,7 +143,7 @@ export function ManageRequestModal({ request, onClose }: ManageRequestModalProps
 
   const confirmPendingAction = async () => {
     if (confirmAction) {
-      await updateApplicationStatus(request.id, confirmAction.donorId, confirmAction.status);
+      await updateApplicationStatus(liveRequest.id, confirmAction.donorId, confirmAction.status);
       setConfirmAction(null);
     }
   };
@@ -171,7 +174,7 @@ export function ManageRequestModal({ request, onClose }: ManageRequestModalProps
                 {isEditing ? 'Edit Request' : isDeleting ? 'Delete Request' : 'Manage Request'}
               </h2>
               <p className="text-sm font-bold !text-slate-800">
-                {request.unitsFulfilled} / {request.unitsRequired} Units Fulfilled
+                {liveRequest.unitsFulfilled} / {liveRequest.unitsRequired} Units Fulfilled
               </p>
             </div>
             <button onClick={onClose} className="p-2 bg-slate-100 hover:bg-slate-200 rounded-full text-slate-500 transition-colors">
@@ -365,18 +368,18 @@ export function ManageRequestModal({ request, onClose }: ManageRequestModalProps
               <div className="w-full h-2.5 bg-slate-200 rounded-full overflow-hidden shadow-inner mb-6 flex-shrink-0">
                  <div 
                    className="h-full bg-emerald-500 rounded-full transition-all duration-500" 
-                   style={{ width: `${Math.min(100, (request.unitsFulfilled / request.unitsRequired) * 100)}%` }}
+                   style={{ width: `${Math.min(100, (liveRequest.unitsFulfilled / liveRequest.unitsRequired) * 100)}%` }}
                  ></div>
               </div>
 
               {/* Applicants List */}
               <div className="flex-1 space-y-3">
-            {request.applications.length === 0 ? (
+            {liveRequest.applications.length === 0 ? (
               <div className="text-center py-10">
                 <p className="text-slate-500 font-bold text-sm">No donors have applied yet.</p>
               </div>
             ) : (
-              request.applications.map((app, idx) => {
+              liveRequest.applications.map((app, idx) => {
                 const donor = donors.find(d => String(d.id) === String(app.donorId)) || {
                   id: (app.matchId || app.donorId) as any,
                   name: app.donorName || 'Donor',
@@ -420,13 +423,13 @@ export function ManageRequestModal({ request, onClose }: ManageRequestModalProps
                         {app.status === 'pending' && (
                           <>
                             <button 
-                              onClick={() => handleActionClick(donor.id, 'rejected')}
+                              onClick={() => handleActionClick(app.matchId || app.id || donor.id, 'rejected')}
                               className="flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors"
                             >
                               Reject
                             </button>
                             <button 
-                              onClick={() => handleActionClick(donor.id, 'accepted')}
+                              onClick={() => handleActionClick(app.matchId || app.id || donor.id, 'accepted')}
                               className="flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs font-extrabold text-white bg-amber-500 hover:bg-amber-600 shadow-md transition-colors"
                             >
                               Accept
@@ -437,13 +440,13 @@ export function ManageRequestModal({ request, onClose }: ManageRequestModalProps
                         {app.status === 'accepted' && (
                           <>
                             <button 
-                              onClick={() => handleActionClick(donor.id, 'canceled')}
+                              onClick={() => handleActionClick(app.matchId || app.id || donor.id, 'canceled')}
                               className="px-3 py-1.5 rounded-lg text-xs font-bold text-slate-600 border border-slate-200 hover:bg-slate-50 transition-colors"
                             >
                               Cancel
                             </button>
                             <button 
-                              onClick={() => handleActionClick(donor.id, 'completed')}
+                              onClick={() => handleActionClick(app.matchId || app.id || donor.id, 'completed')}
                               className="px-3 py-1.5 rounded-lg text-xs font-extrabold text-white bg-emerald-500 hover:bg-emerald-600 shadow-sm flex items-center justify-center gap-1 transition-colors"
                             >
                               <Check size={14} className="stroke-[3]" /> Mark Done
