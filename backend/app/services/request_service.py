@@ -724,7 +724,7 @@ class RequestService:
                     matches = _fetch_matches_by_requests(cursor, req_ids)
                     result = []
                     for r in rows:
-                        row_dict = _format_request_row(r, user_id, matches)
+                        row_dict = _format_request_row(r, current_user_id=user_id, matches_by_request=matches)
                         row_dict["distance"] = float(r.get("distance_km", 0.0))
                         row_dict["distance_km"] = float(r.get("distance_km", 0.0))
                         row_dict["match_score"] = float(r.get("match_score", 0.0)) if r.get("match_score") is not None else None

@@ -52,6 +52,37 @@ class MatchService:
                     )
                     row = cursor.fetchone()
                     match_id = row["match_id"] if row else None
+
+                    # Notify recipient of the new donor application
+                    try:
+                        cursor.execute(
+                            """
+                            SELECT r.user_id AS recipient_user_id, dr.hospital_name, p.full_name AS donor_name
+                            FROM public.donation_requests dr
+                            JOIN public.recipients r ON dr.recipient_id = r.id
+                            CROSS JOIN public.profiles p
+                            WHERE dr.id = %s AND p.id = %s;
+                            """,
+                            (request_id, user_id)
+                        )
+                        info = cursor.fetchone()
+                        if info and info["recipient_user_id"]:
+                            donor_name = info["donor_name"] or "A donor"
+                            hosp = info["hospital_name"] or "your blood request"
+                            cursor.execute(
+                                """
+                                INSERT INTO public.notifications (user_id, title, message, type)
+                                VALUES (%s, %s, %s, 'system');
+                                """,
+                                (
+                                    info["recipient_user_id"],
+                                    "New Donor Application!",
+                                    f"{donor_name} has applied to fulfill your blood request at {hosp}."
+                                )
+                            )
+                    except Exception as notif_err:
+                        logger.warning(f"Failed to generate recipient notification: {notif_err}")
+
                     db.commit()
                     return str(match_id)
                 except HTTPException:

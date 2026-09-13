@@ -16,6 +16,7 @@ export const PAGE_TITLES: Record<string, string> = {
   '/admin/login': 'BloodPing | Admin Login',
   '/admin/dashboard': 'BloodPing | Admin Dashboard',
   '/admin': 'BloodPing | Admin Dashboard',
+  '/notifications': 'BloodPing | Notifications',
 };
 
 /**
