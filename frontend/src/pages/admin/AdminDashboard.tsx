@@ -4,7 +4,7 @@ import {
   ShieldCheck, LogOut, FileText, Users, Search, Filter,
   ArrowUpDown, CheckCircle, XCircle, AlertTriangle, ExternalLink,
   ChevronLeft, ChevronRight, RefreshCw, X, ShieldAlert, UserX, UserCheck,
-  Compass, Clock, Mail, Droplet, ArrowLeft, UserMinus
+  Compass, Clock, Mail, ArrowLeft, UserMinus
 } from 'lucide-react';
 import adminService, { DonorApplication, AdminUserItem } from '../../services/adminService';
 
@@ -210,9 +210,8 @@ export function AdminDashboard() {
       <header className="sticky top-0 z-40 w-full bg-white/40 backdrop-blur-lg border-b border-white/50 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 md:px-8 py-3.5 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Link to="/feed" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-              <Droplet size={26} className="text-red-600 fill-red-600" />
-              <h1 className="font-black text-xl text-slate-900 tracking-tight">BloodPing</h1>
+            <Link to="/feed" className="flex items-center hover:opacity-85 transition-opacity">
+              <img src="/2.png" alt="BloodPing Logo" className="h-9 w-auto object-contain drop-shadow-sm" />
             </Link>
             <span className="hidden sm:inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-red-100 text-red-600 border border-red-200">
               Admin Console

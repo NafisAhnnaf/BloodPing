@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Droplet, Bell, ArrowLeft, User, Lock } from 'lucide-react';
+import { Bell, ArrowLeft, User, Lock } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useRole } from '../../context/RoleContext';
 import notificationService, { NotificationItem } from '../../services/notificationService';
@@ -95,8 +95,8 @@ export function Header({
 
         {showLogo && !showBack && (
           <Link to="/feed" className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity">
-            <Droplet size={28} className="text-red-600 fill-red-600" />
-            <h1 className="font-black text-2xl !text-slate-900 tracking-tight drop-shadow-sm">BloodPing</h1>
+            <img src="/3.png" alt="BloodPing Logo" className="h-10 md:h-20 w-auto object-contain drop-shadow-sm" />
+            <h1 className="font-black text-2xl !text-slate-900 tracking-tight drop-shadow-sm">Blood<span className='text-red-700'>Ping</span></h1>
           </Link>
         )}
 
@@ -114,11 +114,10 @@ export function Header({
           <Link
             key={link.name}
             to={link.path}
-            className={`px-5 py-2 rounded-full transition-all border ${
-              currentPath === link.path
-                ? 'bg-white/80 text-red-700 border-white/60 shadow-sm'
-                : 'bg-white/30 text-slate-700 border-transparent hover:bg-white/60 hover:text-slate-900'
-            }`}
+            className={`px-5 py-2 rounded-full transition-all border ${currentPath === link.path
+              ? 'bg-white/80 text-red-700 border-white/60 shadow-sm'
+              : 'bg-white/30 text-slate-700 border-transparent hover:bg-white/60 hover:text-slate-900'
+              }`}
           >
             {link.name}
           </Link>
@@ -137,11 +136,10 @@ export function Header({
               await setRole('donor');
             }}
             title={!isDonorApproved ? "You are not a registered donor yet. Click to register." : "Switch to Donor view"}
-            className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 ${
-              role === 'donor' 
-                ? 'bg-red-600 text-white shadow-md' 
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
+            className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 ${role === 'donor'
+              ? 'bg-red-600 text-white shadow-md'
+              : 'text-slate-600 hover:text-slate-900'
+              }`}
           >
             <span>Donor</span>
             {!isDonorApproved && (
@@ -151,11 +149,10 @@ export function Header({
           <button
             onClick={() => setRole('recipient')}
             title="Switch to Recipient view"
-            className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all ${
-              role === 'recipient' 
-                ? 'bg-red-600 text-white shadow-md' 
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
+            className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all ${role === 'recipient'
+              ? 'bg-red-600 text-white shadow-md'
+              : 'text-slate-600 hover:text-slate-900'
+              }`}
           >
             Recipient
           </button>
@@ -195,9 +192,8 @@ export function Header({
                     notifications.map((notif) => (
                       <div
                         key={notif.id}
-                        className={`p-3.5 rounded-xl transition-colors border-b border-slate-100 last:border-0 ${
-                          !notif.is_read ? 'bg-red-50/40' : 'hover:bg-slate-50'
-                        }`}
+                        className={`p-3.5 rounded-xl transition-colors border-b border-slate-100 last:border-0 ${!notif.is_read ? 'bg-red-50/40' : 'hover:bg-slate-50'
+                          }`}
                       >
                         <h4 className="text-xs font-black text-slate-800 mb-0.5">{notif.title}</h4>
                         <p className="text-xs font-medium text-slate-600 leading-snug">{notif.message}</p>
