@@ -10,6 +10,8 @@ import apiClient from '../services/apiClient';
 import { supabase } from '../services/supabaseClient';
 import { SessionAuditModal } from '../components/profile/SessionAuditModal';
 import { PreferencesModal } from '../components/profile/PreferencesModal';
+import { MedicalDocumentsModal } from '../components/profile/MedicalDocumentsModal';
+import { PrivacyAvailabilityModal } from '../components/profile/PrivacyAvailabilityModal';
 
 export function DonorProfileStats() {
   const { role } = useRole();
@@ -19,6 +21,8 @@ export function DonorProfileStats() {
   const [loading, setLoading] = useState(true);
   const [isSessionModalOpen, setIsSessionModalOpen] = useState(false);
   const [isPreferencesModalOpen, setIsPreferencesModalOpen] = useState(false);
+  const [isMedicalModalOpen, setIsMedicalModalOpen] = useState(false);
+  const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
 
   const fetchProfile = async () => {
     try {
@@ -37,9 +41,11 @@ export function DonorProfileStats() {
 
   const settingsOptions = [
     { id: 'preferences', icon: Settings, title: 'Preferences', subtitle: 'Location, travel radius & alert settings' },
-    { id: 'medical', icon: UploadCloud, title: 'Medical Documents', subtitle: 'Upload and verify records' },
+    ...(role === 'donor'
+      ? [{ id: 'medical', icon: UploadCloud, title: 'Medical Documents', subtitle: 'View uploaded records & verification' }]
+      : []),
     { id: 'security', icon: History, title: 'Login & Session History', subtitle: 'Manage active devices, IP logs & security' },
-    { id: 'privacy', icon: ShieldCheck, title: 'Privacy Settings', subtitle: 'Manage visibility and data' },
+    { id: 'privacy', icon: ShieldCheck, title: 'Privacy & Availability', subtitle: 'Manage emergency availability, visibility & data' },
     { id: 'logout', icon: LogOut, title: 'Log Out', subtitle: 'Sign out of your account' },
   ];
 
@@ -48,8 +54,16 @@ export function DonorProfileStats() {
       setIsPreferencesModalOpen(true);
       return;
     }
+    if (id === 'medical') {
+      setIsMedicalModalOpen(true);
+      return;
+    }
     if (id === 'security') {
       setIsSessionModalOpen(true);
+      return;
+    }
+    if (id === 'privacy') {
+      setIsPrivacyModalOpen(true);
       return;
     }
     if (id === 'logout') {
@@ -125,7 +139,9 @@ export function DonorProfileStats() {
               {role === 'donor' ? <Droplets size={20} className="text-red-500" /> : <Activity size={20} className="text-red-500" />}
               <span className="text-sm font-bold">{role === 'donor' ? 'Total Donations' : 'Total Requests'}</span>
             </div>
-            <p className="text-3xl font-black text-slate-900">{role === 'donor' ? '12' : '4'}</p>
+            <p className="text-3xl font-black text-slate-900">
+              {role === 'donor' ? (user?.total_donations ?? 0) : (user?.total_requests ?? 0)}
+            </p>
           </div>
 
           <div className="bg-white/90 backdrop-blur-xl border border-slate-200/80 shadow-sm rounded-2xl p-5 flex flex-col gap-2 hover:shadow-md hover:-translate-y-1 transition-all duration-300">
@@ -172,6 +188,18 @@ export function DonorProfileStats() {
       <PreferencesModal 
         isOpen={isPreferencesModalOpen} 
         onClose={() => setIsPreferencesModalOpen(false)} 
+        user={user}
+        onUpdated={fetchProfile}
+      />
+
+      <MedicalDocumentsModal
+        isOpen={isMedicalModalOpen}
+        onClose={() => setIsMedicalModalOpen(false)}
+      />
+
+      <PrivacyAvailabilityModal
+        isOpen={isPrivacyModalOpen}
+        onClose={() => setIsPrivacyModalOpen(false)}
         user={user}
         onUpdated={fetchProfile}
       />

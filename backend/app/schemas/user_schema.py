@@ -24,3 +24,5 @@ class UserDetails(BaseModel):
     location_source: Optional[str] = "browser_gps"
     accuracy_meters: Optional[float] = None
     role: Optional[str] = None
+    total_donations: Optional[int] = 0
+    total_requests: Optional[int] = 0

@@ -52,3 +52,16 @@ def update_user(user_data: UserDetails, user_id: str = Depends(requireAuth)):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to update user."
         )
+
+
+@router.get("/me/export")
+def export_user_data(user_id: str = Depends(requireAuth)):
+    """Exports personal data archive for the authenticated user."""
+    return UserService.export_user_data(user_id)
+
+
+@router.delete("/me")
+def delete_user_account(user_id: str = Depends(requireAuth)):
+    """Permanently deletes the authenticated user's profile and related records."""
+    return UserService.delete_user_account(user_id)
+

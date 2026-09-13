@@ -59,3 +59,32 @@ class DonorDetails(BaseModel):
     is_platform_verified: bool = True
     created_at: str
     updated_at: str
+
+
+class DonorDocumentItem(BaseModel):
+    id: str
+    document_type: str
+    document_url: str
+    status: str
+    rejection_reason: Optional[str] = None
+    document_date: Optional[str] = None
+    uploaded_at: Optional[str] = None
+    reviewed_at: Optional[str] = None
+    source: str
+
+
+class DonorDocumentUpload(BaseModel):
+    document_type: str = Field(default="medical_certificate", description="medical_certificate | blood_test_report | identity_proof | other")
+    storage_url: str = Field(..., min_length=5)
+    document_date: str = Field(..., description="Date on document in YYYY-MM-DD")
+
+
+class DonorAvailabilityUpdate(BaseModel):
+    is_available: bool
+
+
+class DonorAvailabilityResponse(BaseModel):
+    is_available: bool
+    rest_period_until: Optional[str] = None
+    message: str
+

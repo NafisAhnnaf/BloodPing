@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, List
 from app.database import get_db_connection
 from fastapi import HTTPException, status
 
@@ -147,3 +147,120 @@ class DonorService:
                     "created_at": row["created_at"].isoformat(),
                     "updated_at": row["updated_at"].isoformat(),
                 }
+
+    @staticmethod
+    def get_donor_documents(user_id: str) -> List[Dict[str, Any]]:
+        """Retrieves all medical documents and verification applications for a donor."""
+        with get_db_connection() as db:
+            with db.cursor() as cursor:
+                cursor.execute(
+                    "SELECT * FROM public.get_donor_documents(%s::UUID);",
+                    (user_id,),
+                )
+                rows = cursor.fetchall()
+                return [
+                    {
+                        "id": str(r["id"]),
+                        "document_type": r["document_type"],
+                        "document_url": r["document_url"],
+                        "status": r["status"],
+                        "rejection_reason": r.get("rejection_reason"),
+                        "document_date": str(r["document_date"]) if r.get("document_date") else None,
+                        "uploaded_at": r["uploaded_at"].isoformat() if r.get("uploaded_at") else None,
+                        "reviewed_at": r["reviewed_at"].isoformat() if r.get("reviewed_at") else None,
+                        "source": r.get("source", "medical_document"),
+                    }
+                    for r in rows
+                ]
+
+    @staticmethod
+    def upload_medical_document(
+        user_id: str, document_type: str, storage_url: str, document_date: str
+    ) -> Dict[str, Any]:
+        """Uploads an additional medical document for a registered donor."""
+        with get_db_connection() as db:
+            with db.cursor() as cursor:
+                # 1. Verify user is registered as donor
+                cursor.execute("SELECT id FROM public.donors WHERE user_id = %s;", (user_id,))
+                donor_row = cursor.fetchone()
+                if not donor_row:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Only registered donors can upload additional medical records.",
+                    )
+                donor_id = donor_row["id"]
+
+                # 2. Normalize document type enum
+                valid_types = {"medical_certificate", "blood_test_report", "identity_proof", "other"}
+                clean_type = document_type.lower().replace(" ", "_")
+                if clean_type not in valid_types:
+                    clean_type = "medical_certificate"
+
+                try:
+                    cursor.execute(
+                        "CALL public.upload_document(%s::UUID, %s::public.document_type, %s::TEXT, %s::DATE);",
+                        (donor_id, clean_type, storage_url, document_date),
+                    )
+                    db.commit()
+                    return {
+                        "success": True,
+                        "message": "Medical document uploaded successfully and pending verification.",
+                    }
+                except Exception as e:
+                    db.rollback()
+                    logger.error(f"Failed to upload medical document: {e}")
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=str(e),
+                    )
+
+    @staticmethod
+    def get_donor_availability(user_id: str) -> Dict[str, Any]:
+        """Retrieves availability status and rest period for the donor."""
+        with get_db_connection() as db:
+            with db.cursor() as cursor:
+                cursor.execute(
+                    "SELECT is_available, rest_period_until FROM public.donors WHERE user_id = %s;",
+                    (user_id,),
+                )
+                row = cursor.fetchone()
+                if not row:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail="Donor profile not found.",
+                    )
+                return {
+                    "is_available": row["is_available"],
+                    "rest_period_until": row["rest_period_until"].isoformat() if row.get("rest_period_until") else None,
+                    "message": "Donor availability fetched successfully."
+                }
+
+    @staticmethod
+    def update_donor_availability(user_id: str, is_available: bool) -> Dict[str, Any]:
+        """Updates the donor availability toggle in the database."""
+        with get_db_connection() as db:
+            with db.cursor() as cursor:
+                cursor.execute(
+                    """
+                    UPDATE public.donors
+                    SET is_available = %s, updated_at = NOW()
+                    WHERE user_id = %s
+                    RETURNING is_available, rest_period_until;
+                    """,
+                    (is_available, user_id),
+                )
+                row = cursor.fetchone()
+                if not row:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail="Donor profile not found.",
+                    )
+                db.commit()
+                status_text = "available for emergency requests" if is_available else "paused and unavailable"
+                return {
+                    "is_available": row["is_available"],
+                    "rest_period_until": row["rest_period_until"].isoformat() if row.get("rest_period_until") else None,
+                    "message": f"You are now {status_text}."
+                }
+
+
