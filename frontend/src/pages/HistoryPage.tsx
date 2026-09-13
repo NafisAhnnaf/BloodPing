@@ -8,8 +8,8 @@ import { useAppData } from '../context/AppDataContext';
 import { useRole } from '../context/RoleContext';
 
 export function HistoryPage() {
-  const { role } = useRole();
-  const { requests, user } = useAppData();
+  const { role, donorDetails } = useRole();
+  const { requests, user, fetchRequests } = useAppData();
   
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'latest' | 'oldest'>('latest');
@@ -18,22 +18,26 @@ export function HistoryPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
+  React.useEffect(() => {
+    fetchRequests();
+  }, []);
+
   const processedRequests = useMemo(() => {
     let result = [...requests];
 
     // Filter by role & user involvement
     if (role === 'donor') {
       result = result.filter(req => req.applications.some(app => 
-        String(app.donorId) === String(user?.id) ||
-        (app.donorUserId && String(app.donorUserId) === String(user?.id)) ||
-        (app.donorProfileId && String(app.donorProfileId) === String(user?.id))
+        (user?.id && (String(app.donorId) === String(user.id) || String(app.donorUserId) === String(user.id))) ||
+        (donorDetails?.id && String(app.donorProfileId) === String(donorDetails.id)) ||
+        (donorDetails?.user_id && String(app.donorUserId) === String(donorDetails.user_id))
       ));
     } else {
       // Recipient
       result = result.filter(req => 
         req.isOwner || 
         (user?.id && (String(req.recipientUserId) === String(user.id) || String(req.ownerId) === String(user.id))) ||
-        req.authorName === user?.name
+        (user?.name && req.authorName === user.name)
       );
     }
 
@@ -52,7 +56,7 @@ export function HistoryPage() {
     });
 
     return result;
-  }, [searchQuery, sortBy]);
+  }, [requests, role, user, donorDetails, searchQuery, sortBy]);
 
   const totalPages = Math.ceil(processedRequests.length / itemsPerPage);
   const paginatedRequests = processedRequests.slice(
