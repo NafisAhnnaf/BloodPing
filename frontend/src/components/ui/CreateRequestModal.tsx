@@ -15,7 +15,7 @@ interface CreateRequestModalProps {
 }
 
 export function CreateRequestModal({ onClose }: CreateRequestModalProps) {
-  const { createRequest } = useAppData();
+  const { createRequest, currentUser } = useAppData();
   const { requestLocation, loading: geoLoading } = useGeolocation();
   const authUser = useAuthStore(state => state.session?.user);
   
@@ -141,8 +141,8 @@ export function CreateRequestModal({ onClose }: CreateRequestModalProps) {
           email: form.contact?.email || authUser?.email || ''
         } as any,
         deadline: deadlineIso,
-        authorName: 'Current User', // Mocked user
-        distance: 0, // Initial distance mocked
+        authorName: currentUser?.name || authUser?.user_metadata?.full_name || authUser?.email?.split('@')[0] || 'Recipient',
+        distance: 0,
       });
       onClose();
     } catch (err: any) {

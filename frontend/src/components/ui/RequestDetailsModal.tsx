@@ -175,9 +175,9 @@ export function RequestDetailsModal({ request, onClose, onManage }: RequestDetai
 
           <button 
             onClick={() => setShowConfirm(true)}
-            disabled={hasApplied || request.status === 'completed' || isExpired}
+            disabled={hasApplied || request.status === 'completed' || request.status === 'fulfilled' || isExpired}
             className={`flex-1 py-3 px-4 rounded-xl font-extrabold shadow-md transition-all ${
-              hasApplied || request.status === 'completed' || isExpired
+              hasApplied || request.status === 'completed' || request.status === 'fulfilled' || isExpired
                 ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
                 : 'bg-gradient-to-r from-red-600 to-red-500 text-white hover:from-red-500 hover:to-red-400 active:scale-95'
             }`}
@@ -186,7 +186,7 @@ export function RequestDetailsModal({ request, onClose, onManage }: RequestDetai
               ? 'Deadline Expired'
               : hasApplied 
                 ? (myApp?.status === 'canceled' ? 'Canceled' : 'Already Applied') 
-                : request.status === 'completed' ? 'Completed' : 'Apply to Donate'}
+                : (request.status === 'completed' || request.status === 'fulfilled') ? 'Fulfilled' : 'Apply to Donate'}
           </button>
         </div>
 

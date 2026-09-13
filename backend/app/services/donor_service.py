@@ -23,8 +23,8 @@ class DonorService:
                             detail="User profile not found. Please complete profile setup first."
                         )
 
-                    # 2. Check if user is already an approved, verified donor
-                    cursor.execute("SELECT id FROM public.donors WHERE user_id = %s;", (user_id,))
+                    # 2. Check if user is already an approved, verified active donor
+                    cursor.execute("SELECT id FROM public.donors WHERE user_id = %s AND is_active = TRUE;", (user_id,))
                     if cursor.fetchone():
                         raise HTTPException(
                             status_code=status.HTTP_400_BAD_REQUEST,
@@ -124,7 +124,7 @@ class DonorService:
                            rest_period_until, total_donations, current_streak, 
                            longest_streak, last_donation_at, total_points, created_at, updated_at
                     FROM public.donors 
-                    WHERE user_id = %s;
+                    WHERE user_id = %s AND is_active = TRUE;
                     """,
                     (user_id,),
                 )
@@ -220,7 +220,7 @@ class DonorService:
         with get_db_connection() as db:
             with db.cursor() as cursor:
                 cursor.execute(
-                    "SELECT is_available, rest_period_until FROM public.donors WHERE user_id = %s;",
+                    "SELECT is_available, rest_period_until FROM public.donors WHERE user_id = %s AND is_active = TRUE;",
                     (user_id,),
                 )
                 row = cursor.fetchone()
@@ -244,7 +244,7 @@ class DonorService:
                     """
                     UPDATE public.donors
                     SET is_available = %s, updated_at = NOW()
-                    WHERE user_id = %s
+                    WHERE user_id = %s AND is_active = TRUE
                     RETURNING is_available, rest_period_until;
                     """,
                     (is_available, user_id),

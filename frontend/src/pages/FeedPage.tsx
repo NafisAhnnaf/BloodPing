@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
-  MapPin, Search, AlertCircle, Heart, Filter, ChevronLeft, ChevronRight, X, Activity, Crosshair, Loader2, Navigation, RotateCcw
+  MapPin, Search, AlertCircle, Heart, Filter, ChevronLeft, ChevronRight, X, Activity, Crosshair, Loader2, Navigation, RotateCcw, Sparkles
 } from 'lucide-react';
 
 import { RangeSlider } from '../components/ui/RangeSlider';
@@ -8,7 +8,7 @@ import { SegmentedControl } from '../components/ui/SegmentedControl';
 import { SelectDropdown } from '../components/ui/SelectDropdown';
 import { RequestCard } from '../components/ui/RequestCard';
 import { CreateRequestModal } from '../components/ui/CreateRequestModal';
-import { BLOOD_GROUPS } from '../services/mockData';
+import { BLOOD_GROUPS } from '../constants/bloodGroups';
 import { useRole } from '../context/RoleContext';
 import { useAppData } from '../context/AppDataContext';
 import { useGeolocation } from '../hooks/useGeolocation';
@@ -22,7 +22,7 @@ export function FeedPage() {
   const { requestLocation, loading: geoLoading } = useGeolocation();
 
   const [liveCoords, setLiveCoords] = useState<{ lat: number; lng: number } | null>(null);
-  
+
   // Search, Filter, Sort state
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilters, setShowFilters] = useState(false);
@@ -290,10 +290,24 @@ export function FeedPage() {
                             )
                           : (totalDonations > 0
                               ? `You have donated ${totalDonations} time${totalDonations === 1 ? '' : 's'}. You are eligible and ready to save lives today!`
-                              : "Every drop counts. You are currently eligible and ready to respond to blood requests."
+                              : "You haven't made any donations yet. Browse active emergency requests below to help someone in need."
                             )
                         }
                       </p>
+                      {donorDetails && ((donorDetails.total_points ?? 0) > 0 || (donorDetails.current_streak ?? 0) > 0) && (
+                        <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 mt-3">
+                          {(donorDetails.total_points ?? 0) > 0 && (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/20 text-white text-xs font-bold backdrop-blur-md shadow-xs">
+                              <Sparkles size={13} className="text-amber-200" /> {donorDetails.total_points} Points
+                            </span>
+                          )}
+                          {(donorDetails.current_streak ?? 0) > 0 && (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/30 text-white text-xs font-bold backdrop-blur-md shadow-xs">
+                              🔥 {donorDetails.current_streak} Streak
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </>
                   ) : (
                     <>
@@ -316,19 +330,22 @@ export function FeedPage() {
                     <>
                       <p className="text-xs font-bold text-white/80 uppercase tracking-wider mb-1">Rest Period</p>
                       {restPeriodInfo.inRestPeriod ? (
-                        <p className="text-4xl font-black">
-                          {restPeriodInfo.daysRemaining}{' '}
-                          <span className="text-xl font-bold opacity-80">
-                            {restPeriodInfo.daysRemaining === 1 ? 'day' : 'days'}
-                          </span>
-                        </p>
+                        <>
+                          <p className="text-4xl font-black">
+                            {restPeriodInfo.daysRemaining}{' '}
+                            <span className="text-xl font-bold opacity-80">
+                              {restPeriodInfo.daysRemaining === 1 ? 'day' : 'days'}
+                            </span>
+                          </p>
+                          <p className="text-[11px] font-extrabold text-white/80 mt-1">In Recovery</p>
+                        </>
                       ) : (
                         <div>
                           <p className="text-4xl font-black">
                             0 <span className="text-xl font-bold opacity-80">days</span>
                           </p>
                           <span className="inline-block mt-1 text-[11px] font-bold text-emerald-100 bg-emerald-700/40 px-2.5 py-0.5 rounded-full border border-emerald-300/30">
-                            Eligible Now
+                            ✓ Eligible Now
                           </span>
                         </div>
                       )}
