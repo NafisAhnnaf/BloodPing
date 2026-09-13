@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Bell, ArrowLeft, User, Lock, Loader2 } from 'lucide-react';
+import { Bell, ArrowLeft, User, Lock } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useRole } from '../../context/RoleContext';
 import { useNotifications } from '../../context/NotificationContext';
@@ -101,7 +101,7 @@ export function Header({
 
       {/* RIGHT: Role Toggle & Notifications */}
       <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end">
-        <div className="relative flex items-center gap-1 bg-white/50 backdrop-blur-md border border-white/60 p-1 rounded-full shadow-sm">
+        <div className={`relative flex items-center gap-1 bg-white/50 backdrop-blur-md border border-white/60 p-1 rounded-full shadow-sm transition-opacity ${isSwitchingRole ? 'cursor-not-allowed opacity-80' : ''}`}>
           <button
             onClick={async () => {
               if (isSwitchingRole) return;
@@ -116,7 +116,7 @@ export function Header({
             className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 ${role === 'donor'
               ? 'bg-red-600 text-white shadow-md'
               : 'text-slate-600 hover:text-slate-900'
-              } ${isSwitchingRole ? 'opacity-80' : ''}`}
+              } disabled:cursor-not-allowed`}
           >
             <span>Donor</span>
             {!isDonorApproved && (
@@ -133,16 +133,17 @@ export function Header({
             className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all ${role === 'recipient'
               ? 'bg-red-600 text-white shadow-md'
               : 'text-slate-600 hover:text-slate-900'
-              } ${isSwitchingRole ? 'opacity-80' : ''}`}
+              } disabled:cursor-not-allowed`}
           >
             Recipient
           </button>
 
-          {/* Loader overlay over the toggle while switching roles */}
+          {/* Semi-opaque white blurred overlay indicating disabled state */}
           {isSwitchingRole && (
-            <div className="absolute inset-0 bg-white/70 backdrop-blur-[1px] rounded-full flex items-center justify-center pointer-events-none z-10 animate-in fade-in duration-150">
-              <Loader2 size={15} className="animate-spin text-red-600" />
-            </div>
+            <div
+              className="absolute inset-0 bg-white/60 backdrop-blur-[2px] rounded-full cursor-not-allowed z-10 transition-all animate-in fade-in duration-150"
+              title="Updating role..."
+            />
           )}
         </div>
 
