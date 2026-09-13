@@ -205,9 +205,19 @@ export function ManageRequestModal({ request, onClose }: ManageRequestModalProps
 
           {isDeleting && (
             <div className="flex-1 flex flex-col items-center justify-center text-center py-6">
-              <AlertTriangle size={48} className="text-red-500 mb-4" />
-              <h3 className="text-lg font-extrabold text-slate-900 mb-2">Are you absolutely sure?</h3>
-              <p className="text-sm text-slate-600 mb-8 max-w-sm">This action cannot be undone. This will permanently delete your blood request and remove all donor applications.</p>
+              <div className="w-16 h-16 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center mb-4 ring-8 ring-red-50/50">
+                <AlertTriangle size={32} />
+              </div>
+              <h3 className="text-lg font-extrabold text-slate-900 mb-2">Delete Blood Request?</h3>
+              <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-xl p-3.5 text-xs mb-4 text-left max-w-sm">
+                <p className="font-bold flex items-center gap-1.5 mb-1 text-amber-800">
+                  <span>⚠️</span> Point Deduction Notice
+                </p>
+                <p className="text-amber-700 leading-relaxed">
+                  Deleting this active donation request will deduct <span className="font-bold text-amber-900">5 points</span> from your account and automatically cancel all pending donor applications.
+                </p>
+              </div>
+              <p className="text-xs text-slate-500 mb-6 max-w-sm">This action is permanent and cannot be undone.</p>
               <div className="flex gap-3 w-full">
                 <button 
                   onClick={() => setIsDeleting(false)}
@@ -221,7 +231,7 @@ export function ManageRequestModal({ request, onClose }: ManageRequestModalProps
                   disabled={isSubmitting}
                   className="flex-1 py-3 rounded-xl font-bold text-white bg-red-600 hover:bg-red-700 transition-colors shadow-md disabled:opacity-50"
                 >
-                  {isSubmitting ? 'Deleting...' : 'Yes, Delete'}
+                  {isSubmitting ? 'Deleting...' : 'Yes, Delete (-5 pts)'}
                 </button>
               </div>
             </div>

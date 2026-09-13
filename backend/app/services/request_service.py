@@ -534,8 +534,36 @@ class RequestService:
                             status_code=status.HTTP_404_NOT_FOUND,
                             detail="Donation request not found."
                         )
+
+                    # Deduct 5 points penalty if user is a donor
+                    cursor.execute("SELECT id, total_points FROM public.donors WHERE user_id = %s;", (user_id,))
+                    donor_row = cursor.fetchone()
+                    points_deducted = 0
+                    if donor_row:
+                        try:
+                            cursor.execute(
+                                """
+                                SELECT * FROM public.award_points(
+                                    %s::UUID, 
+                                    NULL, 
+                                    'CANCELLATION_PENALTY', 
+                                    -5, 
+                                    'Penalty for deleting blood donation request'
+                                );
+                                """,
+                                (donor_row["id"],)
+                            )
+                            points_deducted = 5
+                        except Exception as pe:
+                            logger.warning(f"Could not deduct points on request deletion: {pe}")
+
                     db.commit()
-                    return {"id": request_id, "status": "deleted"}
+                    return {
+                        "id": request_id, 
+                        "status": "deleted",
+                        "points_deducted": points_deducted,
+                        "message": "Donation request deleted successfully (5 points deducted)." if points_deducted > 0 else "Donation request deleted successfully."
+                    }
                 except HTTPException:
                     db.rollback()
                     raise
@@ -673,7 +701,11 @@ class RequestService:
                 try:
                     cursor.execute(
                         """
-                        SELECT * FROM public.get_personalized_feed(
+                        SELECT 
+                            feed.*,
+                            dr.recipient_id,
+                            r.user_id AS recipient_user_id
+                        FROM public.get_personalized_feed(
                             %s::UUID,
                             %s::DOUBLE PRECISION,
                             %s::DOUBLE PRECISION,
@@ -681,14 +713,18 @@ class RequestService:
                             %s::public.blood_group,
                             %s::INTEGER,
                             %s::INTEGER
-                        );
+                        ) feed
+                        JOIN public.donation_requests dr ON dr.id = feed.request_id
+                        JOIN public.recipients r ON r.id = dr.recipient_id;
                         """,
                         (user_id, lat, lng, radius_km, blood_group, limit, offset),
                     )
                     rows = cursor.fetchall()
+                    req_ids = [str(r.get("request_id") or r.get("id")) for r in rows if r]
+                    matches = _fetch_matches_by_requests(cursor, req_ids)
                     result = []
                     for r in rows:
-                        row_dict = _format_request_row(r)
+                        row_dict = _format_request_row(r, user_id, matches)
                         row_dict["distance"] = float(r.get("distance_km", 0.0))
                         row_dict["distance_km"] = float(r.get("distance_km", 0.0))
                         row_dict["match_score"] = float(r.get("match_score", 0.0)) if r.get("match_score") is not None else None

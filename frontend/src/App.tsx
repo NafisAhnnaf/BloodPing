@@ -17,10 +17,12 @@ import { AdminLogin } from './pages/admin/AdminLogin';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
 import { Suspended } from './pages/Suspended';
 import { BecomeDonorScreen } from './components/ui/BecomeDonorScreen';
+import { useDocumentTitle } from './hooks/useDocumentTitle';
 
 function AppLayout() {
   const { isAuthenticated, isLoading } = useAuth();
   const location = useLocation();
+  useDocumentTitle();
 
   if (isLoading) {
     return (

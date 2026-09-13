@@ -167,7 +167,7 @@ export function RequestCard({ request }: RequestCardProps) {
             onClick={() => setShowManage(true)}
             className="flex items-center gap-2 px-6 py-2.5 rounded-2xl text-sm font-extrabold transition-all shadow-md active:scale-95 bg-slate-800 text-white hover:bg-slate-900"
           >
-            <Settings size={16} /> Manage
+            <Settings size={16} /> Manage Request
           </button>
         ) : (
           <button 
@@ -201,7 +201,16 @@ export function RequestCard({ request }: RequestCardProps) {
         )}
       </div>
 
-      {showDetails && <RequestDetailsModal request={request} onClose={() => setShowDetails(false)} />}
+      {showDetails && (
+        <RequestDetailsModal 
+          request={request} 
+          onClose={() => setShowDetails(false)} 
+          onManage={() => {
+            setShowDetails(false);
+            setShowManage(true);
+          }}
+        />
+      )}
       {showManage && isOwner && <ManageRequestModal request={request} onClose={() => setShowManage(false)} />}
     </div>
   );
