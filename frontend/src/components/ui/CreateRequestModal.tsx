@@ -7,6 +7,7 @@ import { SelectDropdown } from './SelectDropdown';
 import { DatePicker } from './DatePicker';
 import { useGeolocation } from '../../hooks/useGeolocation';
 import { geocodingService, GeocodingResult } from '../../services/geocodingService';
+import { useAuthStore } from '../../stores/authStore';
 
 interface CreateRequestModalProps {
   onClose: () => void;
@@ -15,6 +16,7 @@ interface CreateRequestModalProps {
 export function CreateRequestModal({ onClose }: CreateRequestModalProps) {
   const { createRequest } = useAppData();
   const { requestLocation, loading: geoLoading } = useGeolocation();
+  const authUser = useAuthStore(state => state.session?.user);
   
   const now = new Date();
   const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -27,7 +29,7 @@ export function CreateRequestModal({ onClose }: CreateRequestModalProps) {
     ward: '',
     description: '',
     preferredDistance: 15,
-    contact: { phone: '', secondaryPhone: '', email: '' }
+    contact: { phone: '', secondaryPhone: '', email: authUser?.email || '' }
   });
 
   const [coords, setCoords] = useState<{ latitude: number | null; longitude: number | null }>({
@@ -103,7 +105,11 @@ export function CreateRequestModal({ onClose }: CreateRequestModalProps) {
         ward: form.ward,
         description: form.description || '',
         preferredDistance: form.preferredDistance || 15,
-        contact: form.contact as any,
+        contact: {
+          phone: form.contact?.phone || '',
+          secondaryPhone: form.contact?.secondaryPhone || '',
+          email: form.contact?.email || authUser?.email || ''
+        } as any,
         deadline: deadlineIso,
         authorName: 'Current User', // Mocked user
         distance: 0, // Initial distance mocked
@@ -286,16 +292,6 @@ export function CreateRequestModal({ onClose }: CreateRequestModalProps) {
                 placeholder="Optional"
               />
             </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Email Address</label>
-            <input 
-              type="email" value={form.contact?.email} 
-              onChange={e => setForm({ ...form, contact: { ...form.contact!, email: e.target.value } })}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold focus:ring-2 focus:ring-red-500/30"
-              required
-            />
           </div>
 
           <div>

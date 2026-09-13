@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Droplet, Bell, ArrowLeft, User, Lock } from 'lucide-react';
+import { Bell, ArrowLeft, User, Lock } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useRole } from '../../context/RoleContext';
 import { useNotifications } from '../../context/NotificationContext';
@@ -24,7 +24,7 @@ export function Header({
   const navigate = useNavigate();
   const location = useLocation();
   const currentPath = location.pathname;
-  const { role, setRole, systemRole, isDonorApproved } = useRole();
+  const { role, setRole, systemRole, isDonorApproved, isSwitchingRole } = useRole();
 
   const [showInbox, setShowInbox] = useState(false);
   const inboxRef = useRef<HTMLDivElement>(null);
@@ -70,8 +70,8 @@ export function Header({
 
         {showLogo && !showBack && (
           <Link to="/feed" className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity">
-            <Droplet size={28} className="text-red-600 fill-red-600" />
-            <h1 className="font-black text-2xl !text-slate-900 tracking-tight drop-shadow-sm">BloodPing</h1>
+            <img src="/3.png" alt="BloodPing Logo" className="h-10 md:h-20 w-auto object-contain drop-shadow-sm" />
+            <h1 className="font-black text-2xl !text-slate-900 tracking-tight drop-shadow-sm">Blood<span className='text-red-700'>Ping</span></h1>
           </Link>
         )}
 
@@ -89,11 +89,10 @@ export function Header({
           <Link
             key={link.name}
             to={link.path}
-            className={`px-5 py-2 rounded-full transition-all border ${
-              currentPath === link.path
-                ? 'bg-white/80 text-red-700 border-white/60 shadow-sm'
-                : 'bg-white/30 text-slate-700 border-transparent hover:bg-white/60 hover:text-slate-900'
-            }`}
+            className={`px-5 py-2 rounded-full transition-all border ${currentPath === link.path
+              ? 'bg-white/80 text-red-700 border-white/60 shadow-sm'
+              : 'bg-white/30 text-slate-700 border-transparent hover:bg-white/60 hover:text-slate-900'
+              }`}
           >
             {link.name}
           </Link>
@@ -102,21 +101,22 @@ export function Header({
 
       {/* RIGHT: Role Toggle & Notifications */}
       <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end">
-        <div className="flex items-center gap-1 bg-white/50 backdrop-blur-md border border-white/60 p-1 rounded-full shadow-sm">
+        <div className={`relative flex items-center gap-1 bg-white/50 backdrop-blur-md border border-white/60 p-1 rounded-full shadow-sm transition-opacity ${isSwitchingRole ? 'cursor-not-allowed opacity-80' : ''}`}>
           <button
             onClick={async () => {
+              if (isSwitchingRole) return;
               if (!isDonorApproved) {
                 navigate('/become-donor');
                 return;
               }
               await setRole('donor');
             }}
+            disabled={isSwitchingRole}
             title={!isDonorApproved ? "You are not a registered donor yet. Click to register." : "Switch to Donor view"}
-            className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 ${
-              role === 'donor' 
-                ? 'bg-red-600 text-white shadow-md' 
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
+            className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 ${role === 'donor'
+              ? 'bg-red-600 text-white shadow-md'
+              : 'text-slate-600 hover:text-slate-900'
+              } disabled:cursor-not-allowed`}
           >
             <span>Donor</span>
             {!isDonorApproved && (
@@ -124,16 +124,27 @@ export function Header({
             )}
           </button>
           <button
-            onClick={() => setRole('recipient')}
+            onClick={async () => {
+              if (isSwitchingRole) return;
+              await setRole('recipient');
+            }}
+            disabled={isSwitchingRole}
             title="Switch to Recipient view"
-            className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all ${
-              role === 'recipient' 
-                ? 'bg-red-600 text-white shadow-md' 
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
+            className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all ${role === 'recipient'
+              ? 'bg-red-600 text-white shadow-md'
+              : 'text-slate-600 hover:text-slate-900'
+              } disabled:cursor-not-allowed`}
           >
             Recipient
           </button>
+
+          {/* Semi-opaque white blurred overlay indicating disabled state */}
+          {isSwitchingRole && (
+            <div
+              className="absolute inset-0 bg-white/60 backdrop-blur-[2px] rounded-full cursor-not-allowed z-10 transition-all animate-in fade-in duration-150"
+              title="Updating role..."
+            />
+          )}
         </div>
 
         {showNotification && (

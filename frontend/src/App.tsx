@@ -17,6 +17,7 @@ import { AdminLogin } from './pages/admin/AdminLogin';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
 import { Suspended } from './pages/Suspended';
 import { BecomeDonorScreen } from './components/ui/BecomeDonorScreen';
+import { useDocumentTitle } from './hooks/useDocumentTitle';
 import { NotificationProvider } from './context/NotificationContext';
 import { NotificationToastStack } from './components/ui/NotificationToastStack';
 import { NotificationsPage } from './pages/NotificationsPage';
@@ -24,6 +25,7 @@ import { NotificationsPage } from './pages/NotificationsPage';
 function AppLayout() {
   const { isAuthenticated, isLoading } = useAuth();
   const location = useLocation();
+  useDocumentTitle();
 
   if (isLoading) {
     return (

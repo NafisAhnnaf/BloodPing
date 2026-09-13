@@ -1,19 +1,30 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Phone, Mail, MapPin, Activity, Clock } from 'lucide-react';
+import { X, Phone, Mail, MapPin, Activity, Clock, Settings } from 'lucide-react';
 import { BloodRequest, useAppData } from '../../context/AppDataContext';
+import { useAuthStore } from '../../stores/authStore';
 import { ConfirmActionModal } from './ConfirmActionModal';
 import { CancelApplicationModal } from './CancelApplicationModal';
 
 interface RequestDetailsModalProps {
   request: BloodRequest;
   onClose: () => void;
+  onManage?: () => void;
 }
 
-export function RequestDetailsModal({ request, onClose }: RequestDetailsModalProps) {
+export function RequestDetailsModal({ request, onClose, onManage }: RequestDetailsModalProps) {
   const { applyToRequest, currentUser, cancelApplication } = useAppData();
+  const authUser = useAuthStore(state => state.session?.user);
   const [showConfirm, setShowConfirm] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
+
+  const isOwner = Boolean(
+    request.isOwner ?? 
+    (authUser && (
+      (request.recipientUserId && String(request.recipientUserId) === String(authUser.id)) || 
+      (request.ownerId && String(request.ownerId) === String(authUser.id))
+    ))
+  );
 
   const handleApply = async () => {
     try {

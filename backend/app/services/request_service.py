@@ -534,8 +534,36 @@ class RequestService:
                             status_code=status.HTTP_404_NOT_FOUND,
                             detail="Donation request not found."
                         )
+
+                    # Deduct 5 points penalty if user is a donor
+                    cursor.execute("SELECT id, total_points FROM public.donors WHERE user_id = %s;", (user_id,))
+                    donor_row = cursor.fetchone()
+                    points_deducted = 0
+                    if donor_row:
+                        try:
+                            cursor.execute(
+                                """
+                                SELECT * FROM public.award_points(
+                                    %s::UUID, 
+                                    NULL, 
+                                    'CANCELLATION_PENALTY', 
+                                    -5, 
+                                    'Penalty for deleting blood donation request'
+                                );
+                                """,
+                                (donor_row["id"],)
+                            )
+                            points_deducted = 5
+                        except Exception as pe:
+                            logger.warning(f"Could not deduct points on request deletion: {pe}")
+
                     db.commit()
-                    return {"id": request_id, "status": "deleted"}
+                    return {
+                        "id": request_id, 
+                        "status": "deleted",
+                        "points_deducted": points_deducted,
+                        "message": "Donation request deleted successfully (5 points deducted)." if points_deducted > 0 else "Donation request deleted successfully."
+                    }
                 except HTTPException:
                     db.rollback()
                     raise
