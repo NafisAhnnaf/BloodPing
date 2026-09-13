@@ -27,7 +27,7 @@ def _fetch_matches_by_requests(cursor, request_ids: List[str]) -> Dict[str, List
                 p.full_name AS donor_name,
                 d.blood_group AS donor_blood_group,
                 p.phone AS donor_phone,
-                (SELECT md.storage_url FROM public.medical_documents md WHERE md.donor_id = d.id ORDER BY md.created_at DESC LIMIT 1) as medical_doc_url
+                (SELECT md.storage_url FROM public.medical_documents md WHERE md.donor_id = d.id ORDER BY md.uploaded_at DESC LIMIT 1) as medical_doc_url
             FROM public.donation_matches m
             JOIN public.donors d ON m.donor_id = d.id
             JOIN public.profiles p ON d.user_id = p.id

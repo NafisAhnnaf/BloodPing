@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     EMAILS_FROM_NAME: str = "BloodPing"
     FRONTEND_URL: str = "https://bloodping.vercel.app"
     
+    # Database Pool Configuration
+    DB_POOL_MIN_CONN: int = 2
+    DB_POOL_MAX_CONN: int = 20
+    
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding='utf-8', extra='ignore')
 
 settings = Settings()

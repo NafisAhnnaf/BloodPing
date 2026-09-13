@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
-from app.database import init_db_pool, db_pool
+from app.database import init_db_pool, close_db_pool
 from app.middlewares.auth_middleware import JWTAuthMiddleware
 from app.routers import (
     user_router,
@@ -56,9 +56,7 @@ async def lifespan(app: FastAPI):
             logger.warning(f"Database schema verification warning: {e}")
         
     yield
-    if db_pool is not None:
-        db_pool.closeall()
-        logger.info("Database connection pool closed.")
+    close_db_pool()
 
 
 app = FastAPI(
