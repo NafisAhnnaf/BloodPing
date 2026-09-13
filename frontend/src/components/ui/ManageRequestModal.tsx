@@ -511,6 +511,21 @@ export function ManageRequestModal({ request, onClose }: ManageRequestModalProps
                           </div>
                         </div>
 
+                        {app.medicalDocUrl && (
+                          <div className="mb-4">
+                            <span className="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Medical Document</span>
+                            <a 
+                              href={app.medicalDocUrl} 
+                              target="_blank" 
+                              rel="noopener noreferrer" 
+                              className="inline-flex items-center gap-1.5 text-sm font-bold text-blue-600 hover:text-blue-700 transition-colors bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg border border-blue-200 shadow-sm" 
+                              onClick={e => e.stopPropagation()}
+                            >
+                              <Download size={14} className="text-blue-500" /> View Medical Doc
+                            </a>
+                          </div>
+                        )}
+
                         {app.status === 'canceled' && app.cancelReason && (
                           <div className="mb-4 p-3 bg-rose-50 rounded-xl border border-rose-100">
                             <span className="block text-[10px] text-rose-500 uppercase tracking-wider mb-1 font-bold">Cancellation Reason</span>

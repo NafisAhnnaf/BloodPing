@@ -26,7 +26,8 @@ def _fetch_matches_by_requests(cursor, request_ids: List[str]) -> Dict[str, List
                 d.user_id AS donor_user_id,
                 p.full_name AS donor_name,
                 d.blood_group AS donor_blood_group,
-                p.phone AS donor_phone
+                p.phone AS donor_phone,
+                (SELECT md.storage_url FROM public.medical_documents md WHERE md.donor_id = d.id ORDER BY md.created_at DESC LIMIT 1) as medical_doc_url
             FROM public.donation_matches m
             JOIN public.donors d ON m.donor_id = d.id
             JOIN public.profiles p ON d.user_id = p.id
@@ -50,6 +51,7 @@ def _fetch_matches_by_requests(cursor, request_ids: List[str]) -> Dict[str, List
                 "donorPhone": r["donor_phone"],
                 "bloodGroup": r["donor_blood_group"],
                 "status": str(r["match_status"]),
+                "medicalDocUrl": r.get("medical_doc_url"),
                 "recipient_verification_note": r["recipient_verification_note"],
                 "appliedAt": r["applied_at"].isoformat() if r["applied_at"] else None,
                 "acceptedAt": r["accepted_at"].isoformat() if r["accepted_at"] else None,
