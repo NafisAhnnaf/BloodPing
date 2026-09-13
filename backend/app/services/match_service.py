@@ -1,6 +1,7 @@
 import logging
 from typing import Dict, Any, List, Optional
 from app.database import get_db_connection
+from app.services.email_service import EmailService
 from fastapi import HTTPException, status
 
 logger = logging.getLogger(__name__)
@@ -57,9 +58,12 @@ class MatchService:
                     try:
                         cursor.execute(
                             """
-                            SELECT r.user_id AS recipient_user_id, dr.hospital_name, p.full_name AS donor_name
+                            SELECT r.user_id AS recipient_user_id, dr.hospital_name, dr.blood_group,
+                                   p.full_name AS donor_name, au.email AS recipient_email, rp.full_name AS recipient_name
                             FROM public.donation_requests dr
                             JOIN public.recipients r ON dr.recipient_id = r.id
+                            JOIN auth.users au ON au.id = r.user_id
+                            JOIN public.profiles rp ON rp.id = r.user_id
                             CROSS JOIN public.profiles p
                             WHERE dr.id = %s AND p.id = %s;
                             """,
@@ -69,6 +73,10 @@ class MatchService:
                         if info and info["recipient_user_id"]:
                             donor_name = info["donor_name"] or "A donor"
                             hosp = info["hospital_name"] or "your blood request"
+                            blood_grp = info.get("blood_group") or "Blood"
+                            recipient_email = info.get("recipient_email")
+                            recipient_name = info.get("recipient_name") or "Recipient"
+
                             cursor.execute(
                                 """
                                 INSERT INTO public.notifications (user_id, title, message, type)
@@ -80,8 +88,18 @@ class MatchService:
                                     f"{donor_name} has applied to fulfill your blood request at {hosp}."
                                 )
                             )
+
+                            if recipient_email:
+                                EmailService.send_new_donor_response(
+                                    to_email=recipient_email,
+                                    recipient_name=recipient_name,
+                                    donor_name=donor_name,
+                                    hospital_name=hosp,
+                                    blood_group=blood_grp,
+                                    request_id=request_id
+                                )
                     except Exception as notif_err:
-                        logger.warning(f"Failed to generate recipient notification: {notif_err}")
+                        logger.warning(f"Failed to generate recipient notification or email: {notif_err}")
 
                     db.commit()
                     return str(match_id)
@@ -221,6 +239,36 @@ class MatchService:
                         "SELECT public.update_match_status(%s, %s::text, %s);",
                         (match_id, normalized_status, note),
                     )
+
+                    if normalized_status == "accepted":
+                        try:
+                            cursor.execute(
+                                """
+                                SELECT d.user_id AS donor_user_id, dp.full_name AS donor_name, dau.email AS donor_email,
+                                       dr.hospital_name, rp.full_name AS recipient_name, rp.phone_number
+                                FROM public.donation_matches m
+                                JOIN public.donors d ON m.donor_id = d.id
+                                JOIN public.profiles dp ON dp.id = d.user_id
+                                JOIN auth.users dau ON dau.id = d.user_id
+                                JOIN public.donation_requests dr ON m.request_id = dr.id
+                                JOIN public.recipients r ON dr.recipient_id = r.id
+                                JOIN public.profiles rp ON rp.id = r.user_id
+                                WHERE m.id = %s;
+                                """,
+                                (match_id,)
+                            )
+                            d_info = cursor.fetchone()
+                            if d_info and d_info.get("donor_email"):
+                                EmailService.send_match_accepted_to_donor(
+                                    to_email=d_info["donor_email"],
+                                    donor_name=d_info.get("donor_name") or "Donor",
+                                    recipient_name=d_info.get("recipient_name") or "Recipient",
+                                    hospital_name=d_info.get("hospital_name") or "the designated hospital",
+                                    contact_number=d_info.get("phone_number")
+                                )
+                        except Exception as d_email_err:
+                            logger.warning(f"Failed to send match accepted email to donor: {d_email_err}")
+
                     db.commit()
                 except HTTPException:
                     db.rollback()

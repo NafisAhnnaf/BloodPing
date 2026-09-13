@@ -10,7 +10,8 @@ class TestNotifications(unittest.TestCase):
             "/notifications/{notification_id}/read",
             "/notifications/{notification_id}",
             "/notifications/clear-all",
-            "/notifications/test"
+            "/notifications/test",
+            "/notifications/test-email"
         ]
         for path in expected_paths:
             self.assertIn(path, openapi_paths, f"Expected endpoint {path} not found in registered routes.")
