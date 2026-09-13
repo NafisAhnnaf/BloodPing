@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
-  MapPin, Search, AlertCircle, Heart, Filter, ChevronLeft, ChevronRight, X, Activity, Crosshair, Loader2, Navigation
+  MapPin, Search, AlertCircle, Heart, Filter, ChevronLeft, ChevronRight, X, Activity, Crosshair, Loader2, Navigation, Sparkles
 } from 'lucide-react';
 
 import { RangeSlider } from '../components/ui/RangeSlider';
@@ -8,11 +8,12 @@ import { SegmentedControl } from '../components/ui/SegmentedControl';
 import { SelectDropdown } from '../components/ui/SelectDropdown';
 import { RequestCard } from '../components/ui/RequestCard';
 import { CreateRequestModal } from '../components/ui/CreateRequestModal';
-import { BLOOD_GROUPS } from '../services/mockData';
+import { BLOOD_GROUPS } from '../constants/bloodGroups';
 import { useRole } from '../context/RoleContext';
 import { useAppData } from '../context/AppDataContext';
 import { useGeolocation } from '../hooks/useGeolocation';
 import { Header } from '../components/layout/Header';
+import apiClient from '../services/apiClient';
 
 export function FeedPage() {
   const [activeGroup, setActiveGroup] = useState('All');
@@ -21,6 +22,77 @@ export function FeedPage() {
   const { requestLocation, loading: geoLoading } = useGeolocation();
 
   const [liveCoords, setLiveCoords] = useState<{ lat: number; lng: number } | null>(null);
+
+  // Dynamic Donor Stats State
+  const [donorDetails, setDonorDetails] = useState<{
+    total_donations: number;
+    rest_period_until: string | null;
+    is_available: boolean;
+    total_points?: number;
+    current_streak?: number;
+  } | null>(null);
+  const [donorLoading, setDonorLoading] = useState(false);
+
+  useEffect(() => {
+    if (role === 'donor') {
+      let isMounted = true;
+      setDonorLoading(true);
+      apiClient.get('/donors/me')
+        .then(res => {
+          if (isMounted && res.data) {
+            setDonorDetails({
+              total_donations: res.data.total_donations ?? 0,
+              rest_period_until: res.data.rest_period_until ?? null,
+              is_available: res.data.is_available ?? true,
+              total_points: res.data.total_points ?? 0,
+              current_streak: res.data.current_streak ?? 0,
+            });
+          }
+        })
+        .catch(() => {
+          // If not a verified donor profile yet, fallback to /users/me
+          apiClient.get('/users/me')
+            .then(res => {
+              if (isMounted && res.data) {
+                setDonorDetails({
+                  total_donations: res.data.total_donations ?? 0,
+                  rest_period_until: null,
+                  is_available: true,
+                  total_points: 0,
+                  current_streak: 0,
+                });
+              }
+            })
+            .catch(() => {
+              if (isMounted) {
+                setDonorDetails({
+                  total_donations: 0,
+                  rest_period_until: null,
+                  is_available: true,
+                  total_points: 0,
+                  current_streak: 0,
+                });
+              }
+            });
+        })
+        .finally(() => {
+          if (isMounted) setDonorLoading(false);
+        });
+
+      return () => {
+        isMounted = false;
+      };
+    }
+  }, [role]);
+
+  const remainingRestDays = useMemo(() => {
+    if (!donorDetails?.rest_period_until) return 0;
+    const target = new Date(donorDetails.rest_period_until).getTime();
+    const now = Date.now();
+    const diffMs = target - now;
+    if (diffMs <= 0) return 0;
+    return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  }, [donorDetails?.rest_period_until]);
   
   // Search, Filter, Sort state
   const [searchQuery, setSearchQuery] = useState('');
@@ -146,8 +218,30 @@ export function FeedPage() {
                         Every drop counts.
                       </h2>
                       <p className="text-white/90 text-sm md:text-base font-medium max-w-md mx-auto md:mx-0 leading-relaxed">
-                        You have donated 3 times this year. Your next eligible donation date is in 14 days.
+                        {donorLoading ? (
+                          'Loading your donation activity...'
+                        ) : (donorDetails?.total_donations ?? 0) > 0 ? (
+                          remainingRestDays > 0
+                            ? `You have donated ${donorDetails?.total_donations} time${donorDetails?.total_donations === 1 ? '' : 's'}. You are currently in recovery; your next eligible donation date is in ${remainingRestDays} day${remainingRestDays === 1 ? '' : 's'}.`
+                            : `You have donated ${donorDetails?.total_donations} time${donorDetails?.total_donations === 1 ? '' : 's'}. You are fully eligible to save lives today!`
+                        ) : (
+                          "You haven't made any donations yet. Browse active emergency requests below to help someone in need."
+                        )}
                       </p>
+                      {donorDetails && ((donorDetails.total_points ?? 0) > 0 || (donorDetails.current_streak ?? 0) > 0) && (
+                        <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 mt-3">
+                          {(donorDetails.total_points ?? 0) > 0 && (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/20 text-white text-xs font-bold backdrop-blur-md shadow-xs">
+                              <Sparkles size={13} className="text-amber-200" /> {donorDetails.total_points} Points
+                            </span>
+                          )}
+                          {(donorDetails.current_streak ?? 0) > 0 && (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/30 text-white text-xs font-bold backdrop-blur-md shadow-xs">
+                              🔥 {donorDetails.current_streak} Streak
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </>
                   ) : (
                     <>
@@ -168,8 +262,28 @@ export function FeedPage() {
                <div className="relative z-10 bg-white/20 backdrop-blur-md px-8 py-5 rounded-2xl border border-white/20 text-center flex-shrink-0 w-full md:w-auto shadow-sm">
                   {role === 'donor' ? (
                     <>
-                      <p className="text-xs font-bold text-white/80 uppercase tracking-wider mb-1">Rest Period</p>
-                      <p className="text-4xl font-black">14 <span className="text-xl font-bold opacity-80">days</span></p>
+                      <p className="text-xs font-bold text-white/80 uppercase tracking-wider mb-1">
+                        {remainingRestDays > 0 ? 'Rest Period' : 'Status'}
+                      </p>
+                      {donorLoading ? (
+                        <div className="h-10 flex items-center justify-center">
+                          <Loader2 size={24} className="animate-spin text-white" />
+                        </div>
+                      ) : remainingRestDays > 0 ? (
+                        <>
+                          <p className="text-4xl font-black">
+                            {remainingRestDays} <span className="text-xl font-bold opacity-80">days</span>
+                          </p>
+                          <p className="text-[11px] font-extrabold text-white/80 mt-1">In Recovery</p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-3xl font-black text-white">Eligible</p>
+                          <p className="text-[11px] font-extrabold text-white/90 bg-emerald-500/40 border border-emerald-300/40 rounded-full px-2.5 py-0.5 mt-1.5 inline-block">
+                            ✓ Ready to Donate
+                          </p>
+                        </>
+                      )}
                     </>
                   ) : (
                     <>

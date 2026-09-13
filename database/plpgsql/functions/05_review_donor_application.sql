@@ -41,11 +41,14 @@ BEGIN
 
     -- If approved, insert or update the donors table and send notification
     IF p_status = 'approved' THEN
-        INSERT INTO public.donors (user_id, blood_group, travel_radius_km)
-        VALUES (v_user_id, v_blood_group, v_travel_radius)
+        INSERT INTO public.donors (user_id, blood_group, travel_radius_km, is_active, is_available, is_platform_verified)
+        VALUES (v_user_id, v_blood_group, v_travel_radius, TRUE, TRUE, TRUE)
         ON CONFLICT (user_id) DO UPDATE SET
             blood_group = EXCLUDED.blood_group,
             travel_radius_km = EXCLUDED.travel_radius_km,
+            is_active = TRUE,
+            is_available = TRUE,
+            is_platform_verified = TRUE,
             updated_at = NOW();
 
         INSERT INTO public.notifications (
