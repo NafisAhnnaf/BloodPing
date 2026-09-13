@@ -16,7 +16,7 @@ import { Header } from '../components/layout/Header';
 
 export function FeedPage() {
   const [activeGroup, setActiveGroup] = useState('All');
-  const { role } = useRole();
+  const { role, donorDetails, refreshDonorDetails } = useRole();
   const { requests, fetchRequests } = useAppData();
   const { requestLocation, loading: geoLoading } = useGeolocation();
 
@@ -124,6 +124,38 @@ export function FeedPage() {
     setCurrentPage(1);
   }, [activeGroup, searchQuery, maxDistance, urgencyFilter, sortBy]);
 
+  useEffect(() => {
+    if (role === 'donor') {
+      refreshDonorDetails();
+    }
+  }, [role]);
+
+  const restPeriodInfo = useMemo(() => {
+    if (!donorDetails?.rest_period_until) {
+      return { inRestPeriod: false, daysRemaining: 0, dateFormatted: null };
+    }
+    const untilDate = new Date(donorDetails.rest_period_until);
+    const now = new Date();
+    const diffMs = untilDate.getTime() - now.getTime();
+    const days = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+    if (days <= 0) {
+      return { inRestPeriod: false, daysRemaining: 0, dateFormatted: null };
+    }
+
+    return {
+      inRestPeriod: true,
+      daysRemaining: days,
+      dateFormatted: untilDate.toLocaleDateString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        year: untilDate.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
+      })
+    };
+  }, [donorDetails?.rest_period_until]);
+
+  const totalDonations = donorDetails?.total_donations ?? 0;
+
   const myRequests = useMemo(() => requests.filter(r => r.isOwner), [requests]);
   const myActiveRequests = useMemo(() => myRequests.filter(r => r.status === 'open'), [myRequests]);
   const myFulfilledUnits = useMemo(() => myRequests.reduce((acc, r) => acc + (r.unitsFulfilled || 0), 0), [myRequests]);
@@ -146,7 +178,16 @@ export function FeedPage() {
                         Every drop counts.
                       </h2>
                       <p className="text-white/90 text-sm md:text-base font-medium max-w-md mx-auto md:mx-0 leading-relaxed">
-                        You have donated 3 times this year. Your next eligible donation date is in 14 days.
+                        {restPeriodInfo.inRestPeriod
+                          ? (totalDonations > 0
+                              ? `You have donated ${totalDonations} time${totalDonations === 1 ? '' : 's'}. Your next eligible donation date is in ${restPeriodInfo.daysRemaining} day${restPeriodInfo.daysRemaining === 1 ? '' : 's'}${restPeriodInfo.dateFormatted ? ` (${restPeriodInfo.dateFormatted})` : ''}.`
+                              : `Your next eligible donation date is in ${restPeriodInfo.daysRemaining} day${restPeriodInfo.daysRemaining === 1 ? '' : 's'}${restPeriodInfo.dateFormatted ? ` (${restPeriodInfo.dateFormatted})` : ''}.`
+                            )
+                          : (totalDonations > 0
+                              ? `You have donated ${totalDonations} time${totalDonations === 1 ? '' : 's'}. You are eligible and ready to save lives today!`
+                              : "Every drop counts. You are currently eligible and ready to respond to blood requests."
+                            )
+                        }
                       </p>
                     </>
                   ) : (
@@ -169,7 +210,23 @@ export function FeedPage() {
                   {role === 'donor' ? (
                     <>
                       <p className="text-xs font-bold text-white/80 uppercase tracking-wider mb-1">Rest Period</p>
-                      <p className="text-4xl font-black">14 <span className="text-xl font-bold opacity-80">days</span></p>
+                      {restPeriodInfo.inRestPeriod ? (
+                        <p className="text-4xl font-black">
+                          {restPeriodInfo.daysRemaining}{' '}
+                          <span className="text-xl font-bold opacity-80">
+                            {restPeriodInfo.daysRemaining === 1 ? 'day' : 'days'}
+                          </span>
+                        </p>
+                      ) : (
+                        <div>
+                          <p className="text-4xl font-black">
+                            0 <span className="text-xl font-bold opacity-80">days</span>
+                          </p>
+                          <span className="inline-block mt-1 text-[11px] font-bold text-emerald-100 bg-emerald-700/40 px-2.5 py-0.5 rounded-full border border-emerald-300/30">
+                            Eligible Now
+                          </span>
+                        </div>
+                      )}
                     </>
                   ) : (
                     <>
