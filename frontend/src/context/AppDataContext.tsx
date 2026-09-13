@@ -21,6 +21,7 @@ export interface Application {
   donorName?: string;
   donorPhone?: string;
   bloodGroup?: string;
+  medicalDocUrl?: string;
   appliedAt?: string;
   acceptedAt?: string;
   confirmedAt?: string;
@@ -234,6 +235,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         donorPhone: app.donorPhone,
         bloodGroup: app.bloodGroup,
         status: app.status === 'confirmed' ? 'completed' : (app.status === 'withdrawn' ? 'canceled' : app.status),
+        medicalDocUrl: app.medicalDocUrl,
         cancelReason: app.recipient_verification_note || app.cancelReason,
         appliedAt: app.appliedAt,
         acceptedAt: app.acceptedAt,

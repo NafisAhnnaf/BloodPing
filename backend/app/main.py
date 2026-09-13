@@ -50,6 +50,8 @@ async def lifespan(app: FastAPI):
         logger.info("Verifying database schema...")
         try:
             verify_schema()
+        except SystemExit:
+            logger.warning("Database schema verification exited with SystemExit. Continuing startup.")
         except Exception as e:
             logger.warning(f"Database schema verification warning: {e}")
         
