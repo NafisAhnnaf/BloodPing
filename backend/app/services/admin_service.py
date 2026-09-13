@@ -4,6 +4,7 @@ from typing import List, Dict, Any, Optional
 from fastapi import HTTPException, status
 from app.core.supabase_client import supabase
 from app.database import get_db_connection
+from app.services.email_service import EmailService
 
 logger = logging.getLogger(__name__)
 
@@ -166,6 +167,42 @@ class AdminService:
                 'p_rejection_reason': rejection_reason
             }
             supabase.rpc('review_donor_application', params).execute()
+
+            # Trigger email notification asynchronously
+            try:
+                with get_db_connection() as db:
+                    with db.cursor() as cursor:
+                        cursor.execute(
+                            """
+                            SELECT da.user_id, da.blood_group, p.full_name, au.email
+                            FROM public.donor_applications da
+                            JOIN public.profiles p ON p.id = da.user_id
+                            JOIN auth.users au ON au.id = da.user_id
+                            WHERE da.id = %s;
+                            """,
+                            (application_id,)
+                        )
+                        app_info = cursor.fetchone()
+                        if app_info and app_info.get("email"):
+                            applicant_email = app_info["email"]
+                            applicant_name = app_info.get("full_name") or "Donor Applicant"
+                            blood_grp = app_info.get("blood_group")
+
+                            if status_val == "approved":
+                                EmailService.send_donor_application_approved(
+                                    to_email=applicant_email,
+                                    full_name=applicant_name,
+                                    blood_group=blood_grp
+                                )
+                            elif status_val == "rejected":
+                                EmailService.send_donor_application_rejected(
+                                    to_email=applicant_email,
+                                    full_name=applicant_name,
+                                    reason=rejection_reason
+                                )
+            except Exception as email_err:
+                logger.warning(f"Failed to dispatch email for application review {application_id}: {email_err}")
+
             return {"success": True, "message": f"Application {status_val} successfully."}
         except Exception as e:
             logger.error(f"Error reviewing donor application {application_id}: {e}")

@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from app.core.auth import requireAuth
 from app.database import get_db_connection
+from app.services.email_service import EmailService
 
 router = APIRouter(prefix="/notifications", tags=["Notifications"])
 
@@ -239,4 +240,51 @@ async def create_test_notification(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create test notification: {str(e)}",
         )
+
+
+class TestEmailRequest(BaseModel):
+    to_email: Optional[str] = None
+
+
+@router.post("/test-email", response_model=NotificationResponse)
+async def send_test_email_endpoint(
+    data: Optional[TestEmailRequest] = None,
+    user_id: str = Depends(requireAuth)
+):
+    """
+    Sends a test email to verify SMTP / Gmail credentials.
+    If 'to_email' is omitted, sends to the authenticated user's registered email address.
+    """
+    try:
+        user_info = EmailService.get_user_contact_info(user_id)
+        recipient_email = data.to_email if data and data.to_email else (user_info.get("email") if user_info else None)
+
+        if not recipient_email:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Recipient email could not be determined. Please pass 'to_email' in the request body."
+            )
+
+        user_name = user_info.get("full_name") if user_info else "BloodPing Member"
+        sent = EmailService.send_test_email(to_email=recipient_email, user_name=user_name)
+
+        if not sent:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to send test email. Please check your SMTP credentials (SMTP_USER, SMTP_PASSWORD) in .env."
+            )
+
+        return NotificationResponse(
+            success=True,
+            payload={"delivered_to": recipient_email},
+            message=f"Test email successfully sent to {recipient_email}.",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error sending test email: {str(e)}",
+        )
+
 
