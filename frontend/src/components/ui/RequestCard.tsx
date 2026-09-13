@@ -110,7 +110,7 @@ export function RequestCard({ request }: RequestCardProps) {
           </div>
           {request.status !== 'open' && (
              <span className={`px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider font-extrabold shadow-sm ${
-               request.status === 'completed' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-amber-100 text-amber-700 border-amber-200'
+               request.status === 'completed' || request.status === 'fulfilled' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-amber-100 text-amber-700 border-amber-200'
              } border`}>
                {request.status}
              </span>
@@ -178,17 +178,17 @@ export function RequestCard({ request }: RequestCardProps) {
                 setShowDetails(true);
               }
             }}
-            disabled={request.status === 'completed'}
+            disabled={request.status === 'completed' || request.status === 'fulfilled'}
             className={`flex items-center gap-2 px-6 py-2.5 rounded-2xl text-sm font-extrabold transition-all shadow-md active:scale-95 ${
-              request.status === 'completed'
+              request.status === 'completed' || request.status === 'fulfilled'
                 ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
                 : hasApplied
                   ? 'bg-amber-100 text-amber-700 hover:bg-amber-200 shadow-none'
                   : 'bg-gradient-to-r from-red-600 to-red-500 text-white hover:shadow-lg hover:from-red-500 hover:to-red-400'
             }`}
           >
-            {request.status === 'completed' ? (
-              'Completed'
+            {request.status === 'completed' || request.status === 'fulfilled' ? (
+              'Fulfilled'
             ) : hasApplied ? (
               <span className="capitalize">{userApp?.status || 'Applied'}</span>
             ) : (
