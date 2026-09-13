@@ -63,6 +63,10 @@ export function RequestCard({ request }: RequestCardProps) {
       return years === 1 ? '1 year ago' : `${years} years ago`;
     }
   };
+  const isExpired = Boolean(
+    request.status === 'expired' || 
+    (request.status === 'open' && request.deadline && new Date(request.deadline).getTime() <= Date.now())
+  );
   const timeAgoText = formatTimeAgo(request.date);
   const deadlineDate = new Date(request.deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 
@@ -108,7 +112,11 @@ export function RequestCard({ request }: RequestCardProps) {
               {request.bloodGroup}
             </span>
           </div>
-          {request.status !== 'open' && (
+          {isExpired ? (
+            <span className="px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider font-extrabold shadow-sm bg-slate-100 text-slate-700 border border-slate-300">
+              Expired
+            </span>
+          ) : request.status !== 'open' && (
              <span className={`px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider font-extrabold shadow-sm ${
                request.status === 'completed' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-amber-100 text-amber-700 border-amber-200'
              } border`}>
@@ -145,13 +153,21 @@ export function RequestCard({ request }: RequestCardProps) {
            <MapPin size={14} className="text-red-500 flex-shrink-0" />
            <span className="truncate">{request.hospital}</span>
          </div>
-         <div className="flex items-center gap-1.5 text-rose-700 bg-rose-50/80 px-2 py-0.5 rounded-lg border border-rose-200/60">
-           <Navigation size={13} className="text-red-600 flex-shrink-0" />
-           <span>{request.distance ? `${Number(request.distance).toFixed(1)} km away` : 'Nearby'}</span>
-         </div>
+          <div className="flex items-center gap-1.5 text-rose-700 bg-rose-50/80 px-2 py-0.5 rounded-lg border border-rose-200/60">
+            <Navigation size={13} className="text-red-600 flex-shrink-0" />
+            <span>
+              {request.distance != null && !isNaN(Number(request.distance))
+                ? Number(request.distance) === 0
+                  ? 'Nearby (< 0.1 km)'
+                  : `${Number(request.distance).toFixed(1)} km away`
+                : 'Nearby'}
+            </span>
+          </div>
          <div className="flex items-center gap-1.5">
-           <Clock size={14} className="text-amber-500 flex-shrink-0" />
-           <span>By {deadlineDate}</span>
+           <Clock size={14} className={isExpired ? "text-red-500 flex-shrink-0" : "text-amber-500 flex-shrink-0"} />
+           <span className={isExpired ? "text-red-600 font-bold" : ""}>
+             {isExpired ? `Expired (${deadlineDate})` : `By ${deadlineDate}`}
+           </span>
          </div>
       </div>
 
@@ -168,6 +184,13 @@ export function RequestCard({ request }: RequestCardProps) {
             className="flex items-center gap-2 px-6 py-2.5 rounded-2xl text-sm font-extrabold transition-all shadow-md active:scale-95 bg-slate-800 text-white hover:bg-slate-900"
           >
             <Settings size={16} /> Manage Request
+          </button>
+        ) : isExpired ? (
+          <button 
+            disabled
+            className="flex items-center gap-1.5 px-5 py-2.5 rounded-2xl text-xs font-black bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed shadow-none"
+          >
+            Deadline Passed
           </button>
         ) : (
           <button 

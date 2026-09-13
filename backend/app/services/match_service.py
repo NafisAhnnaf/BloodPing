@@ -47,6 +47,29 @@ class MatchService:
                             detail="You cannot apply to your own donation request."
                         )
 
+                    # 3. Verify request is still open and not expired
+                    cursor.execute(
+                        """
+                        SELECT id, status, required_by
+                        FROM public.donation_requests
+                        WHERE id = %s;
+                        """,
+                        (request_id,)
+                    )
+                    req_row = cursor.fetchone()
+                    if not req_row:
+                        raise HTTPException(
+                            status_code=status.HTTP_404_NOT_FOUND,
+                            detail="Donation request not found."
+                        )
+                    now_utc = datetime.now(timezone.utc)
+                    req_by = req_row["required_by"]
+                    if req_row["status"] != "open" or (req_by and req_by < now_utc):
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="This donation request has expired or is no longer open for applications."
+                        )
+
                     cursor.execute(
                         "SELECT (public.apply_to_donation_request(%s, %s)).id AS match_id;",
                         (request_id, actual_donor_id),

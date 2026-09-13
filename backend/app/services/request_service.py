@@ -70,7 +70,20 @@ def _format_request_row(
     req_id_str = str(req_id)
     recipient_user_id = str(row["recipient_user_id"]) if "recipient_user_id" in row and row["recipient_user_id"] else None
     is_owner = bool(current_user_id and recipient_user_id and str(current_user_id) == str(recipient_user_id))
+    req_status = row.get("status")
+    required_by_val = row.get("required_by")
+    if req_status == "open" and required_by_val:
+        try:
+            now_utc = datetime.now(timezone.utc)
+            req_dt = required_by_val if isinstance(required_by_val, datetime) else datetime.fromisoformat(str(required_by_val).replace("Z", "+00:00"))
+            if req_dt.tzinfo is None:
+                req_dt = req_dt.replace(tzinfo=timezone.utc)
+            if req_dt < now_utc:
+                req_status = "expired"
+        except Exception:
+            pass
     applications = matches_by_request.get(req_id_str, []) if matches_by_request else []
+
     return {
         "id": req_id_str,
         "recipient_id": str(row["recipient_id"]) if "recipient_id" in row and row["recipient_id"] else None,
@@ -88,7 +101,7 @@ def _format_request_row(
         "is_urgent": row.get("is_urgent") if "is_urgent" in row else row.get("urgent", False),
         "notes": row.get("notes"),
         "required_by": row["required_by"].isoformat() if row.get("required_by") else None,
-        "status": row.get("status"),
+        "status": req_status,
         "created_at": row["created_at"].isoformat() if row.get("created_at") else None,
         "recipient_name": row.get("recipient_name"),
         "recipient_phone": row.get("recipient_phone"),

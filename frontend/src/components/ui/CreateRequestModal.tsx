@@ -7,6 +7,7 @@ import { SelectDropdown } from './SelectDropdown';
 import { DatePicker } from './DatePicker';
 import { useGeolocation } from '../../hooks/useGeolocation';
 import { geocodingService, GeocodingResult } from '../../services/geocodingService';
+import { resolveBangladeshDistrictCoords } from '../../utils/geoUtils';
 import { useAuthStore } from '../../stores/authStore';
 
 interface CreateRequestModalProps {
@@ -94,14 +95,43 @@ export function CreateRequestModal({ onClose }: CreateRequestModalProps) {
 
     try {
       setIsSubmitting(true);
+
+      let finalLat = coords.latitude;
+      let finalLng = coords.longitude;
+
+      if (finalLat == null || finalLng == null) {
+        const searchQuery = `${form.hospital} ${form.address}`.trim();
+        if (searchQuery) {
+          const results = await geocodingService.searchAddress(searchQuery);
+          if (results.length > 0) {
+            finalLat = results[0].latitude;
+            finalLng = results[0].longitude;
+          } else if (form.address) {
+            const addrResults = await geocodingService.searchAddress(form.address);
+            if (addrResults.length > 0) {
+              finalLat = addrResults[0].latitude;
+              finalLng = addrResults[0].longitude;
+            }
+          }
+        }
+      }
+
+      if (finalLat == null || finalLng == null) {
+        const districtMatch = resolveBangladeshDistrictCoords(`${form.hospital} ${form.address}`);
+        if (districtMatch) {
+          finalLat = districtMatch.lat;
+          finalLng = districtMatch.lng;
+        }
+      }
+
       await createRequest({
         hospital: form.hospital || '',
         bloodGroup: form.bloodGroup || 'A+',
         unitsRequired: isNaN(parsedUnits) || parsedUnits < 1 ? 1 : parsedUnits,
         urgent: form.urgent || false,
         address: form.address,
-        hospitalLat: coords.latitude ?? 23.8103,
-        hospitalLng: coords.longitude ?? 90.4125,
+        hospitalLat: finalLat ?? 23.8103,
+        hospitalLng: finalLng ?? 90.4125,
         ward: form.ward,
         description: form.description || '',
         preferredDistance: form.preferredDistance || 15,

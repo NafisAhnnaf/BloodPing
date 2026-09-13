@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
-  MapPin, Search, AlertCircle, Heart, Filter, ChevronLeft, ChevronRight, X, Activity, Crosshair, Loader2, Navigation
+  MapPin, Search, AlertCircle, Heart, Filter, ChevronLeft, ChevronRight, X, Activity, Crosshair, Loader2, Navigation, RotateCcw
 } from 'lucide-react';
 
 import { RangeSlider } from '../components/ui/RangeSlider';
@@ -13,6 +13,7 @@ import { useRole } from '../context/RoleContext';
 import { useAppData } from '../context/AppDataContext';
 import { useGeolocation } from '../hooks/useGeolocation';
 import { Header } from '../components/layout/Header';
+import { calculateDistanceKm } from '../utils/geoUtils';
 
 export function FeedPage() {
   const [activeGroup, setActiveGroup] = useState('All');
@@ -26,91 +27,195 @@ export function FeedPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [maxDistance, setMaxDistance] = useState<number>(25); // default 25km per specification
-  const [urgencyFilter, setUrgencyFilter] = useState<'all' | 'urgent' | 'open'>('all');
-  const [sortBy, setSortBy] = useState<'nearest' | 'urgent' | 'latest' | 'oldest' | 'abc' | 'deadline'>('nearest');
+  const [isNationwide, setIsNationwide] = useState<boolean>(false);
+  const [includeExpired, setIncludeExpired] = useState<boolean>(false);
+  const [urgencyFilter, setUrgencyFilter] = useState<'all' | 'urgent' | 'routine'>('all');
+  const [sortBy, setSortBy] = useState<'nearest' | 'deadline' | 'expiring_soonest' | 'urgent' | 'latest' | 'oldest' | 'abc'>('nearest');
   const [showCreateModal, setShowCreateModal] = useState(false);
   
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
+  const effectiveNationwide = isNationwide || sortBy === 'deadline';
+
   const handleEnableLiveGPS = async () => {
     const pos = await requestLocation();
     if (pos) {
-      setLiveCoords({ lat: pos.latitude, lng: pos.longitude });
-      await fetchRequests({ lat: pos.latitude, lng: pos.longitude, radius_km: maxDistance });
+      const coords = { lat: pos.latitude, lng: pos.longitude };
+      setLiveCoords(coords);
+      await fetchRequests({ lat: coords.lat, lng: coords.lng, radius_km: 200 });
     }
   };
 
+  // Attempt auto-location on mount
   useEffect(() => {
-    fetchRequests({
-      lat: liveCoords?.lat,
-      lng: liveCoords?.lng,
-      radius_km: maxDistance,
-    });
-  }, [maxDistance]);
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          setLiveCoords(coords);
+          fetchRequests({ lat: coords.lat, lng: coords.lng, radius_km: 200 });
+        },
+        () => {
+          // Geolocation prompt dismissed or denied, initial fetch with wide radius
+          fetchRequests({ radius_km: 200 });
+        },
+        { timeout: 5000, maximumAge: 60000 }
+      );
+    } else {
+      fetchRequests({ radius_km: 200 });
+    }
+  }, []);
 
-  const { processedRequests, isProximityFallback } = useMemo(() => {
-    let result = [...requests];
+  // Live distance calculation relative to user location (or Dhaka default 23.8103, 90.4125)
+  const userLat = liveCoords?.lat ?? 23.8103;
+  const userLng = liveCoords?.lng ?? 90.4125;
+
+  const requestsWithLiveDistance = useMemo(() => {
+    return requests.map(req => {
+      let dist = req.distance;
+      if (req.hospitalLat != null && req.hospitalLng != null && !isNaN(req.hospitalLat) && !isNaN(req.hospitalLng)) {
+        dist = calculateDistanceKm(userLat, userLng, req.hospitalLat, req.hospitalLng);
+      }
+      const rounded = typeof dist === 'number' && !isNaN(dist) ? Number(dist.toFixed(1)) : 0;
+      return {
+        ...req,
+        distance: rounded,
+        distanceKm: rounded,
+      };
+    });
+  }, [requests, userLat, userLng]);
+
+  const processedRequests = useMemo(() => {
+    let result = [...requestsWithLiveDistance];
+
+    // Handle Expired Deadline Check
+    const now = Date.now();
+    result = result.map(req => {
+      const isPastDeadline = Boolean(req.deadline && new Date(req.deadline).getTime() <= now);
+      const isExpired = req.status === 'expired' || (req.status === 'open' && isPastDeadline);
+      return {
+        ...req,
+        status: isExpired ? ('expired' as const) : req.status
+      };
+    });
+
+    // Unless includeExpired is true or it's the owner's request, filter out expired requests from donor feed
+    if (!includeExpired) {
+      result = result.filter(req => req.isOwner || req.status !== 'expired');
+    }
 
     // Filter by Blood Group
     if (activeGroup !== 'All') {
-      result = result.filter(req => req.bloodGroup === activeGroup);
+      result = result.filter(
+        req => req.bloodGroup?.trim().toUpperCase() === activeGroup.trim().toUpperCase()
+      );
     }
 
-    // Filter by Search Query
+    // Filter by Search Query (hospital, address, ward, bloodGroup, description, authorName)
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      result = result.filter(req => req.hospital.toLowerCase().includes(q));
+      const q = searchQuery.trim().toLowerCase();
+      result = result.filter(req => {
+        const hospital = (req.hospital || '').toLowerCase();
+        const address = (req.address || '').toLowerCase();
+        const ward = (req.ward || '').toLowerCase();
+        const bloodGroup = (req.bloodGroup || '').toLowerCase();
+        const description = (req.description || '').toLowerCase();
+        const authorName = (req.authorName || '').toLowerCase();
+        return (
+          hospital.includes(q) ||
+          address.includes(q) ||
+          ward.includes(q) ||
+          bloodGroup.includes(q) ||
+          description.includes(q) ||
+          authorName.includes(q)
+        );
+      });
     }
 
     // Filter by Urgency
-    if (urgencyFilter === 'urgent') result = result.filter(req => req.urgent);
-    if (urgencyFilter === 'open') result = result.filter(req => !req.urgent);
+    if (urgencyFilter === 'urgent') {
+      result = result.filter(req => Boolean(req.urgent));
+    } else if (urgencyFilter === 'routine') {
+      result = result.filter(req => !req.urgent);
+    }
 
-    // Filter by Distance
-    const withinDistance = result.filter(req => req.distance <= maxDistance);
-    const isFallback = withinDistance.length === 0 && result.length > 0;
-    const listToDisplay = isFallback ? [...result] : withinDistance;
+    // Filter by Distance: When not nationwide, strictly respect maxDistance
+    if (!effectiveNationwide) {
+      result = result.filter(req => {
+        if (req.distance == null || isNaN(req.distance)) return true;
+        return req.distance <= maxDistance;
+      });
+    }
 
     // Sorting
-    listToDisplay.sort((a, b) => {
-      // In proximity fallback mode when sortBy is default 'nearest', rank by latest deadline first
-      if (isFallback && sortBy === 'nearest') {
-        const deadlineA = a.deadline ? new Date(a.deadline).getTime() : 0;
-        const deadlineB = b.deadline ? new Date(b.deadline).getTime() : 0;
-        if (deadlineB !== deadlineA) return deadlineB - deadlineA;
+    result.sort((a, b) => {
+      if (sortBy === 'nearest') {
+        const distA = a.distance ?? 999999;
+        const distB = b.distance ?? 999999;
+        if (distA !== distB) return distA - distB;
         return new Date(b.date).getTime() - new Date(a.date).getTime();
       }
 
       if (sortBy === 'deadline') {
         const deadlineA = a.deadline ? new Date(a.deadline).getTime() : 0;
         const deadlineB = b.deadline ? new Date(b.deadline).getTime() : 0;
-        if (deadlineB !== deadlineA) return deadlineB - deadlineA;
+        if (deadlineB !== deadlineA) return deadlineB - deadlineA; // Latest deadline first (all over country)
         return new Date(b.date).getTime() - new Date(a.date).getTime();
       }
-      if (sortBy === 'nearest') {
-        // Tier 1: Urgent requests within 25 km come first
-        const aUrgentClose = a.urgent && a.distance <= 25 ? 0 : 1;
-        const bUrgentClose = b.urgent && b.distance <= 25 ? 0 : 1;
-        if (aUrgentClose !== bUrgentClose) return aUrgentClose - bUrgentClose;
-        if (a.distance !== b.distance) return a.distance - b.distance;
+
+      if (sortBy === 'expiring_soonest') {
+        const deadlineA = a.deadline ? new Date(a.deadline).getTime() : Infinity;
+        const deadlineB = b.deadline ? new Date(b.deadline).getTime() : Infinity;
+        if (deadlineA !== deadlineB) return deadlineA - deadlineB; // Soonest deadline first
         return new Date(b.date).getTime() - new Date(a.date).getTime();
       }
+
       if (sortBy === 'urgent') {
         if (a.urgent !== b.urgent) return a.urgent ? -1 : 1;
-        return a.distance - b.distance;
+        const distA = a.distance ?? 999999;
+        const distB = b.distance ?? 999999;
+        if (distA !== distB) return distA - distB;
+        return new Date(b.date).getTime() - new Date(a.date).getTime();
       }
-      if (sortBy === 'abc') return a.hospital.localeCompare(b.hospital);
-      
+
+      if (sortBy === 'abc') {
+        return (a.hospital || '').localeCompare(b.hospital || '');
+      }
+
       const dateA = new Date(a.date).getTime();
       const dateB = new Date(b.date).getTime();
       if (sortBy === 'latest') return dateB - dateA;
-      return dateA - dateB;
+      if (sortBy === 'oldest') return dateA - dateB;
+
+      return 0;
     });
 
-    return { processedRequests: listToDisplay, isProximityFallback: isFallback };
-  }, [requests, activeGroup, searchQuery, maxDistance, urgencyFilter, sortBy]);
+    return result;
+  }, [requestsWithLiveDistance, activeGroup, searchQuery, maxDistance, effectiveNationwide, includeExpired, urgencyFilter, sortBy]);
+
+  const distantRequestsCount = useMemo(() => {
+    let candidate = [...requestsWithLiveDistance];
+    if (!includeExpired) {
+      const now = Date.now();
+      candidate = candidate.filter(req => req.isOwner || !(req.status === 'expired' || (req.status === 'open' && req.deadline && new Date(req.deadline).getTime() <= now)));
+    }
+    if (activeGroup !== 'All') {
+      candidate = candidate.filter(req => req.bloodGroup?.trim().toUpperCase() === activeGroup.trim().toUpperCase());
+    }
+    return candidate.filter(req => req.distance > maxDistance).length;
+  }, [requestsWithLiveDistance, activeGroup, maxDistance, includeExpired]);
+
+  const handleResetFilters = () => {
+    setActiveGroup('All');
+    setSearchQuery('');
+    setMaxDistance(50);
+    setIsNationwide(false);
+    setIncludeExpired(false);
+    setUrgencyFilter('all');
+    setSortBy('nearest');
+  };
 
   // Pagination Logic
   const totalPages = Math.ceil(processedRequests.length / itemsPerPage);
@@ -259,7 +364,7 @@ export function FeedPage() {
                     type="text" 
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search hospitals..."
+                    placeholder="Search hospitals, locations, blood groups..."
                     className="w-full bg-white/60 backdrop-blur-md border border-white/60 text-slate-900 rounded-2xl py-3 pl-11 pr-4 font-bold placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500/50 shadow-sm"
                   />
                 </div>
@@ -282,55 +387,113 @@ export function FeedPage() {
                     </button>
                  </div>
                  
-                 <div className="flex flex-col space-y-6">
-                   {/* Distance Slider */}
-                   <div>
-                     <RangeSlider 
-                       label="Distance"
-                       value={maxDistance}
-                       min={1}
-                       max={50}
-                       unit="km"
-                       marks={[10, 20, 30, 40]}
-                       onChange={setMaxDistance}
-                     />
-                   </div>
+                  <div className="flex flex-col space-y-6">
+                    {/* Distance / Range Controls */}
+                    <div>
+                      <div className="flex justify-between items-center mb-3">
+                        <label className="text-xs font-bold text-slate-400 tracking-wider uppercase text-left">Search Range</label>
+                        <div className="flex items-center gap-1 bg-slate-200/60 p-1 rounded-xl">
+                          <button
+                            type="button"
+                            onClick={() => setIsNationwide(false)}
+                            className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                              !effectiveNationwide
+                                ? 'bg-white text-red-600 shadow-sm'
+                                : 'text-slate-600 hover:text-slate-900'
+                            }`}
+                          >
+                            Within Radius
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setIsNationwide(true)}
+                            className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                              effectiveNationwide
+                                ? 'bg-white text-red-600 shadow-sm'
+                                : 'text-slate-600 hover:text-slate-900'
+                            }`}
+                          >
+                            All Over Country
+                          </button>
+                        </div>
+                      </div>
 
-                   <div className="h-px w-full bg-orange-100/60" />
+                      {!effectiveNationwide ? (
+                        <RangeSlider 
+                          label="Distance"
+                          value={maxDistance}
+                          min={1}
+                          max={100}
+                          unit="km"
+                          marks={[10, 25, 50, 75]}
+                          onChange={setMaxDistance}
+                        />
+                      ) : (
+                        <div className="p-3 bg-red-50/70 border border-red-200/60 rounded-xl text-xs font-semibold text-red-800">
+                          Showing blood donation requests nationwide from all regions of Bangladesh.
+                        </div>
+                      )}
+                    </div>
 
-                   {/* Urgency Filter */}
-                   <div>
-                     <SegmentedControl 
-                       label="Urgency"
-                       value={urgencyFilter}
-                       onChange={(val) => setUrgencyFilter(val as any)}
-                       options={[
-                         { label: 'All', value: 'all' },
-                         { label: 'Urgent', value: 'urgent' },
-                         { label: 'Open', value: 'open' }
-                       ]}
-                     />
-                   </div>
+                    <div className="h-px w-full bg-orange-100/60" />
 
-                   <div className="h-px w-full bg-orange-100/60" />
+                    {/* Urgency Filter */}
+                    <div>
+                      <SegmentedControl 
+                        label="Urgency"
+                        value={urgencyFilter}
+                        onChange={(val) => setUrgencyFilter(val as any)}
+                        options={[
+                          { label: 'All', value: 'all' },
+                          { label: 'Urgent', value: 'urgent' },
+                          { label: 'Routine', value: 'routine' }
+                        ]}
+                      />
+                    </div>
 
-                   {/* Sort Options */}
-                   <div>
-                     <label className="block text-xs font-bold text-slate-400 tracking-wider uppercase text-left mb-3">Sort By</label>
-                     <SelectDropdown
-                       value={sortBy}
-                       onChange={(val) => setSortBy(val as any)}
-                       options={[
-                         { label: 'Nearest First (Proximity)', value: 'nearest' },
-                         { label: 'Latest Deadline First', value: 'deadline' },
-                         { label: 'Most Urgent First', value: 'urgent' },
-                         { label: 'Latest First', value: 'latest' },
-                         { label: 'Oldest First', value: 'oldest' },
-                         { label: 'Alphabetical (A-Z)', value: 'abc' }
-                       ]}
-                     />
-                   </div>
-                 </div>
+                    <div className="h-px w-full bg-orange-100/60" />
+
+                    {/* Sort Options */}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-400 tracking-wider uppercase text-left mb-3">Sort By</label>
+                      <SelectDropdown
+                        value={sortBy}
+                        onChange={(val) => setSortBy(val as any)}
+                        options={[
+                          { label: 'Nearest First (Proximity)', value: 'nearest' },
+                          { label: 'Latest Deadline First (All Over Country)', value: 'deadline' },
+                          { label: 'Expiring Soonest First (Urgent)', value: 'expiring_soonest' },
+                          { label: 'Most Urgent First', value: 'urgent' },
+                          { label: 'Latest First (Newest)', value: 'latest' },
+                          { label: 'Oldest First', value: 'oldest' },
+                          { label: 'Alphabetical (A-Z)', value: 'abc' }
+                        ]}
+                      />
+                    </div>
+
+                    <div className="h-px w-full bg-orange-100/60" />
+
+                    {/* Include Expired Requests Toggle */}
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="block text-xs font-bold text-slate-800">Include Expired Requests</span>
+                        <span className="text-[11px] text-slate-500 font-medium">Show past requests whose deadline has passed</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setIncludeExpired(!includeExpired)}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                          includeExpired ? 'bg-red-600' : 'bg-slate-300'
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            includeExpired ? 'translate-x-6' : 'translate-x-1'
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  </div>
                </div>
              )}
 
@@ -366,50 +529,65 @@ export function FeedPage() {
             <div className="flex items-center gap-2">
               <Navigation size={15} className="text-red-600" />
               <span>
-                {liveCoords
-                  ? `Live GPS Active (Within ${maxDistance} km)`
-                  : `Ranked by Proximity to Your Location (Within ${maxDistance} km)`}
+                {effectiveNationwide
+                  ? 'All Over Country (Nationwide Feed)'
+                  : liveCoords
+                    ? `Live GPS Active (Within ${maxDistance} km)`
+                    : `Ranked by Proximity (Within ${maxDistance} km)`}
               </span>
             </div>
-            <button
-              type="button"
-              onClick={handleEnableLiveGPS}
-              disabled={geoLoading}
-              className="flex items-center gap-1.5 text-red-600 hover:text-red-700 font-extrabold text-[11px] bg-white/80 hover:bg-white px-3 py-1.5 rounded-xl border border-red-200 transition-all active:scale-95 shadow-xs disabled:opacity-50"
-            >
-              {geoLoading ? (
-                <>
-                  <Loader2 size={12} className="animate-spin" />
-                  Locating...
-                </>
-              ) : (
-                <>
-                  <Crosshair size={12} />
-                  {liveCoords ? 'Refresh GPS' : 'Use Live GPS'}
-                </>
-              )}
-            </button>
+            {!effectiveNationwide && (
+              <button
+                type="button"
+                onClick={handleEnableLiveGPS}
+                disabled={geoLoading}
+                className="flex items-center gap-1.5 text-red-600 hover:text-red-700 font-extrabold text-[11px] bg-white/80 hover:bg-white px-3 py-1.5 rounded-xl border border-red-200 transition-all active:scale-95 shadow-xs disabled:opacity-50"
+              >
+                {geoLoading ? (
+                  <>
+                    <Loader2 size={12} className="animate-spin" />
+                    Locating...
+                  </>
+                ) : (
+                  <>
+                    <Crosshair size={12} />
+                    {liveCoords ? 'Refresh GPS' : 'Use Live GPS'}
+                  </>
+                )}
+              </button>
+            )}
           </div>
-
-          {/* Proximity Fallback Notice */}
-          {isProximityFallback && (
-            <div className="flex items-center gap-3 bg-amber-500/10 border border-amber-500/30 px-4 py-3 rounded-2xl text-amber-900 shadow-sm animate-in fade-in">
-              <AlertCircle size={18} className="text-amber-600 flex-shrink-0" />
-              <p className="text-xs font-semibold leading-relaxed">
-                No blood requests found within <span className="font-bold">{maxDistance} km</span>. Showing all active requests ordered by <span className="font-bold">latest deadline first</span>.
-              </p>
-            </div>
-          )}
 
           {/* Vertical Feed Content */}
           <section className="flex flex-col gap-4">
             {paginatedRequests.length === 0 ? (
-               <div className="flex flex-col items-center justify-center py-16 text-center bg-white/40 backdrop-blur-md rounded-3xl border border-white/50 shadow-sm">
-                  <div className="w-20 h-20 bg-white/60 rounded-full flex items-center justify-center mb-4 shadow-inner">
-                     <AlertCircle size={32} className="text-slate-400" />
+               <div className="flex flex-col items-center justify-center py-12 px-4 text-center bg-white/40 backdrop-blur-md rounded-3xl border border-white/50 shadow-sm">
+                  <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mb-4 shadow-inner">
+                     <MapPin size={28} />
                   </div>
-                  <h3 className="text-xl font-bold text-slate-800 mb-1">No Requests Found</h3>
-                  <p className="text-slate-500 max-w-xs text-sm font-medium">Try adjusting your filters or search terms.</p>
+                  <h3 className="text-lg font-bold text-slate-800 mb-1">No Requests Found</h3>
+                  <p className="text-slate-600 max-w-sm text-sm font-medium mb-4">
+                    {!effectiveNationwide && distantRequestsCount > 0
+                      ? `No requests match your filters within ${maxDistance} km (${distantRequestsCount} request${distantRequestsCount === 1 ? '' : 's'} available further away in Bangladesh).`
+                      : 'No donation requests match your selected filters and search query.'}
+                  </p>
+                  <div className="flex flex-wrap items-center justify-center gap-2">
+                    {!effectiveNationwide && distantRequestsCount > 0 && (
+                      <button
+                        onClick={() => setIsNationwide(true)}
+                        className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm"
+                      >
+                        Show All Over Country
+                      </button>
+                    )}
+                    <button
+                      onClick={handleResetFilters}
+                      className="flex items-center gap-1 px-4 py-2 bg-white/80 hover:bg-white text-slate-700 rounded-xl text-xs font-bold border border-slate-200 transition-all shadow-sm"
+                    >
+                      <RotateCcw size={13} />
+                      Reset Filters
+                    </button>
+                  </div>
                </div>
             ) : (
                (paginatedRequests || []).map(req => (

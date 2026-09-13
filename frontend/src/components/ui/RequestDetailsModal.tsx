@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Phone, Mail, MapPin, Activity, Clock, Settings } from 'lucide-react';
+import { X, Phone, Mail, MapPin, Activity, Clock, Settings, Navigation, AlertCircle } from 'lucide-react';
 import { BloodRequest, useAppData } from '../../context/AppDataContext';
 import { useAuthStore } from '../../stores/authStore';
 import { ConfirmActionModal } from './ConfirmActionModal';
@@ -52,6 +52,10 @@ export function RequestDetailsModal({ request, onClose, onManage }: RequestDetai
     (app.donorProfileId && String(app.donorProfileId) === String(currentUser?.id))
   );
   const hasApplied = !!myApp;
+  const isExpired = Boolean(
+    request.status === 'expired' || 
+    (request.status === 'open' && request.deadline && new Date(request.deadline).getTime() <= Date.now())
+  );
   const isCancellable = myApp && (myApp.status === 'pending' || myApp.status === 'accepted');
 
   useEffect(() => {
@@ -83,6 +87,13 @@ export function RequestDetailsModal({ request, onClose, onManage }: RequestDetai
           </button>
         </div>
 
+        {isExpired && (
+          <div className="p-3 mb-4 bg-red-50 text-red-700 border border-red-200 rounded-xl text-xs font-bold flex items-center gap-2">
+            <AlertCircle size={16} className="text-red-600 flex-shrink-0" />
+            <span>This blood request has expired and is no longer accepting donor applications.</span>
+          </div>
+        )}
+
         {/* Info Rows */}
         <div className="space-y-4 mb-6">
           <div className="flex justify-between items-center p-3 bg-white/60 rounded-xl border border-slate-100">
@@ -107,6 +118,12 @@ export function RequestDetailsModal({ request, onClose, onManage }: RequestDetai
                   <p className="text-sm font-extrabold text-slate-800">{request.hospital}</p>
                   {request.address && <p className="text-xs font-medium text-slate-600">{request.address}</p>}
                   {request.ward && <p className="text-xs font-medium text-slate-600">Ward: {request.ward}</p>}
+                  {request.distance != null && !isNaN(Number(request.distance)) && (
+                    <div className="flex items-center gap-1 text-xs font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200/60 w-fit mt-1.5">
+                      <Navigation size={11} className="text-rose-600" />
+                      <span>{Number(request.distance) === 0 ? 'Nearby (< 0.1 km)' : `${Number(request.distance).toFixed(1)} km away`}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -158,16 +175,18 @@ export function RequestDetailsModal({ request, onClose, onManage }: RequestDetai
 
           <button 
             onClick={() => setShowConfirm(true)}
-            disabled={hasApplied || request.status === 'completed'}
+            disabled={hasApplied || request.status === 'completed' || isExpired}
             className={`flex-1 py-3 px-4 rounded-xl font-extrabold shadow-md transition-all ${
-              hasApplied || request.status === 'completed'
+              hasApplied || request.status === 'completed' || isExpired
                 ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
                 : 'bg-gradient-to-r from-red-600 to-red-500 text-white hover:from-red-500 hover:to-red-400 active:scale-95'
             }`}
           >
-            {hasApplied 
-              ? (myApp?.status === 'canceled' ? 'Canceled' : 'Already Applied') 
-              : request.status === 'completed' ? 'Completed' : 'Apply to Donate'}
+            {isExpired
+              ? 'Deadline Expired'
+              : hasApplied 
+                ? (myApp?.status === 'canceled' ? 'Canceled' : 'Already Applied') 
+                : request.status === 'completed' ? 'Completed' : 'Apply to Donate'}
           </button>
         </div>
 

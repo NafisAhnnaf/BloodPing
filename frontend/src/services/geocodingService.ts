@@ -1,3 +1,5 @@
+import { resolveBangladeshDistrictCoords } from '../utils/geoUtils';
+
 export interface GeocodingResult {
   latitude: number;
   longitude: number;
@@ -29,28 +31,72 @@ export const geocodingService = {
         throw new Error(`Nominatim API error: ${response.statusText}`);
       }
 
-      const data = await response.json();
-      return (data || []).map((item: any) => {
-        const address = item.address || {};
-        const city =
-          address.city ||
-          address.town ||
-          address.municipality ||
-          address.suburb ||
-          address.state_district ||
-          address.state ||
-          '';
+      let data = await response.json();
 
-        return {
-          latitude: parseFloat(item.lat),
-          longitude: parseFloat(item.lon),
-          displayName: item.display_name,
-          city,
-          country: address.country || '',
-        };
-      });
+      // If no results, retry with ", Bangladesh" appended
+      if ((!data || data.length === 0) && !query.toLowerCase().includes('bangladesh')) {
+        try {
+          const retryRes = await fetch(
+            `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
+              query.trim() + ', Bangladesh'
+            )}&limit=5&addressdetails=1`,
+            { headers: { 'Accept-Language': 'en' } }
+          );
+          if (retryRes.ok) {
+            data = await retryRes.json();
+          }
+        } catch {
+          // ignore retry error
+        }
+      }
+
+      if (data && data.length > 0) {
+        return data.map((item: any) => {
+          const address = item.address || {};
+          const city =
+            address.city ||
+            address.town ||
+            address.municipality ||
+            address.suburb ||
+            address.state_district ||
+            address.state ||
+            '';
+
+          return {
+            latitude: parseFloat(item.lat),
+            longitude: parseFloat(item.lon),
+            displayName: item.display_name,
+            city,
+            country: address.country || '',
+          };
+        });
+      }
+
+      // Fallback: Check built-in Bangladesh district coordinates
+      const matchedDistrict = resolveBangladeshDistrictCoords(query);
+      if (matchedDistrict) {
+        return [{
+          latitude: matchedDistrict.lat,
+          longitude: matchedDistrict.lng,
+          displayName: `${matchedDistrict.districtName}, Bangladesh`,
+          city: matchedDistrict.districtName,
+          country: 'Bangladesh',
+        }];
+      }
+
+      return [];
     } catch (error) {
       console.warn('Geocoding search failed:', error);
+      const matchedDistrict = resolveBangladeshDistrictCoords(query);
+      if (matchedDistrict) {
+        return [{
+          latitude: matchedDistrict.lat,
+          longitude: matchedDistrict.lng,
+          displayName: `${matchedDistrict.districtName}, Bangladesh`,
+          city: matchedDistrict.districtName,
+          country: 'Bangladesh',
+        }];
+      }
       return [];
     }
   },

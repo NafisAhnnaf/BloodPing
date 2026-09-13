@@ -6,6 +6,7 @@ import apiClient from '../services/apiClient';
 import { sessionService } from '../services/sessionService';
 import { requestService } from '../services/requestService';
 import { useNotifications } from './NotificationContext';
+import { calculateDistanceKm } from '../utils/geoUtils';
 
 export type RequestStatus = 'open' | 'pending' | 'completed' | 'canceled' | 'cancelled' | 'in_progress' | 'fulfilled' | 'expired';
 export type ApplicationStatus = 'pending' | 'accepted' | 'completed' | 'rejected' | 'canceled' | 'confirmed' | 'withdrawn' | 'no_show';
@@ -99,7 +100,7 @@ interface AppDataContextType {
 const AppDataContext = createContext<AppDataContextType | undefined>(undefined);
 
 export function AppDataProvider({ children }: { children: ReactNode }) {
-  const [requests, setRequests] = useState<BloodRequest[]>(initialRequests as BloodRequest[]);
+  const [requests, setRequests] = useState<BloodRequest[]>([]);
   const [donors, setDonors] = useState<Donor[]>(initialDonors);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   
@@ -123,11 +124,28 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     }
   }, [session]);
 
-  const mapRequestItem = (req: any, currentAuthUserId?: string, forceIsOwner = false) => {
+  const mapRequestItem = (
+    req: any,
+    currentAuthUserId?: string,
+    forceIsOwner = false,
+    userCoords?: { lat?: number; lng?: number }
+  ) => {
     const isOwner = forceIsOwner || req.is_owner || (currentAuthUserId && (
       String(req.recipient_user_id) === String(currentAuthUserId) ||
       String(req.owner_id) === String(currentAuthUserId)
     ));
+
+    const hLat = req.hospital_lat != null ? Number(req.hospital_lat) : (req.hospitalLat != null ? Number(req.hospitalLat) : undefined);
+    const hLng = req.hospital_lng != null ? Number(req.hospital_lng) : (req.hospitalLng != null ? Number(req.hospitalLng) : undefined);
+
+    let dist = Number(req.distance_km ?? req.distance ?? 0.0);
+    if ((dist <= 0 || isNaN(dist)) && hLat != null && hLng != null) {
+      const uLat = userCoords?.lat ?? 23.8103;
+      const uLng = userCoords?.lng ?? 90.4125;
+      dist = calculateDistanceKm(uLat, uLng, hLat, hLng);
+    }
+    dist = typeof dist === 'number' && !isNaN(dist) ? Number(dist.toFixed(1)) : 0;
+
     return {
       id: req.id,
       recipientId: req.recipient_id,
@@ -136,8 +154,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       isOwner: Boolean(isOwner),
       hospital: req.hospital_name || req.hospital,
       address: req.hospital_address || req.address,
-      hospitalLat: req.hospital_lat || req.hospitalLat,
-      hospitalLng: req.hospital_lng || req.hospitalLng,
+      hospitalLat: hLat,
+      hospitalLng: hLng,
       ward: req.ward || '',
       authorName: req.recipient_name || req.authorName || 'Anonymous Recipient',
       description: req.notes || req.description || '',
@@ -148,8 +166,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       bloodGroup: req.blood_group || req.bloodGroup,
       unitsFulfilled: req.units_fulfilled ?? req.unitsFulfilled ?? 0,
       unitsRequired: req.units_required ?? req.unitsRequired ?? 1,
-      distance: req.distance_km ?? req.distance ?? 0.0,
-      distanceKm: req.distance_km ?? req.distance ?? 0.0,
+      distance: dist,
+      distanceKm: dist,
       matchScore: req.match_score ?? req.matchScore ?? null,
       urgent: req.is_urgent ?? req.urgent ?? false,
       date: req.created_at || req.date,
@@ -179,7 +197,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       const params: Record<string, any> = {};
       if (coords?.lat !== undefined && coords?.lat !== null) params.lat = coords.lat;
       if (coords?.lng !== undefined && coords?.lng !== null) params.lng = coords.lng;
-      if (coords?.radius_km !== undefined) params.radius_km = coords.radius_km;
+      params.radius_km = coords?.radius_km ?? 200;
 
       const currentAuthUserId = useAuthStore.getState().session?.user?.id;
 
@@ -202,7 +220,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       // 1. Process user's own requests first (always marked with isOwner = true)
       if (myReqRes.data && myReqRes.data.success && Array.isArray(myReqRes.data.payload.requests)) {
         myReqRes.data.payload.requests.forEach((req: any) => {
-          const item = mapRequestItem(req, currentAuthUserId, true);
+          const item = mapRequestItem(req, currentAuthUserId, true, coords);
           requestsMap.set(String(item.id), item);
         });
       }
@@ -211,7 +229,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       if (feedRes.data && feedRes.data.success && Array.isArray(feedRes.data.payload.requests)) {
         feedRes.data.payload.requests.forEach((req: any) => {
           const idStr = String(req.id);
-          const item = mapRequestItem(req, currentAuthUserId);
+          const item = mapRequestItem(req, currentAuthUserId, false, coords);
           if (!requestsMap.has(idStr)) {
             requestsMap.set(idStr, item);
           } else {
@@ -221,6 +239,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
               distance: item.distance,
               distanceKm: item.distanceKm,
               matchScore: item.matchScore,
+              hospitalLat: item.hospitalLat ?? existing.hospitalLat,
+              hospitalLng: item.hospitalLng ?? existing.hospitalLng,
             });
           }
         });
