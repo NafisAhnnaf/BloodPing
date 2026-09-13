@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
-import { initialRequests, initialDonors } from '../services/mockData';
 import { useAuthStore } from '../stores/authStore';
 import { supabase } from '../services/supabaseClient';
 import apiClient from '../services/apiClient';
@@ -64,7 +63,7 @@ export interface BloodRequest {
 }
 
 export interface Donor {
-  id: number;
+  id: string | number;
   name: string;
   units: number;
   bloodType: string;
@@ -73,6 +72,8 @@ export interface Donor {
   lastDonated?: string;
   medicalDocUrl?: string;
   phone?: string;
+  email?: string;
+  role?: string;
 }
 
 interface AppDataContextType {
@@ -80,6 +81,7 @@ interface AppDataContextType {
   donors: Donor[];
   currentUser: Donor;
   user: Donor | null;
+  refreshUser: () => Promise<void>;
   isAuthenticated: boolean;
   fetchRequests: (coords?: { lat?: number; lng?: number; radius_km?: number }) => Promise<void>;
   login: (credentials: any, isDemo?: boolean) => Promise<void>;
@@ -99,8 +101,8 @@ interface AppDataContextType {
 const AppDataContext = createContext<AppDataContextType | undefined>(undefined);
 
 export function AppDataProvider({ children }: { children: ReactNode }) {
-  const [requests, setRequests] = useState<BloodRequest[]>(initialRequests as BloodRequest[]);
-  const [donors, setDonors] = useState<Donor[]>(initialDonors);
+  const [requests, setRequests] = useState<BloodRequest[]>([]);
+  const [donors, setDonors] = useState<Donor[]>([]);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   
   const session = useAuthStore(state => state.session);
@@ -108,19 +110,68 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<Donor | null>(null);
   const { fetchNotifications: syncNotifications } = useNotifications();
 
-  // Sync state from Zustand session
+  const refreshUser = async () => {
+    const currentSession = useAuthStore.getState().session;
+    if (!currentSession?.user) {
+      setUser(null);
+      return;
+    }
+    try {
+      const res = await apiClient.get('/users/me');
+      if (res.data) {
+        setUser({
+          id: currentSession.user.id as any,
+          name: res.data.full_name || currentSession.user.user_metadata?.full_name || currentSession.user.email?.split('@')[0] || 'User',
+          units: res.data.total_donations ?? 0,
+          bloodType: res.data.blood_group || currentSession.user.user_metadata?.blood_group || '',
+          phone: res.data.phone || currentSession.user.phone || '',
+          email: res.data.email || currentSession.user.email,
+          role: res.data.role || currentSession.user.user_metadata?.role,
+        });
+      }
+    } catch (err) {
+      console.debug('Failed to refresh user profile:', err);
+    }
+  };
+
+  // Sync state from Zustand session & fetch real profile from /users/me
   useEffect(() => {
+    let isMounted = true;
     if (session && session.user) {
-      setUser({
+      const initialUser: Donor = {
         id: session.user.id as any,
         name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'User',
-        units: 20, // default units
-        bloodType: 'O+', // default
-        phone: session.user.phone || '',
-      });
+        units: 0,
+        bloodType: session.user.user_metadata?.blood_group || '',
+        phone: session.user.phone || session.user.user_metadata?.phone || '',
+        email: session.user.email,
+        role: session.user.user_metadata?.role,
+      };
+      setUser(initialUser);
+
+      apiClient.get('/users/me')
+        .then(res => {
+          if (isMounted && res.data) {
+            setUser({
+              id: session.user.id as any,
+              name: res.data.full_name || initialUser.name,
+              units: res.data.total_donations ?? 0,
+              bloodType: res.data.blood_group || initialUser.bloodType || '',
+              phone: res.data.phone || initialUser.phone || '',
+              email: res.data.email || initialUser.email,
+              role: res.data.role || initialUser.role,
+            });
+          }
+        })
+        .catch(err => {
+          console.debug('Failed to load user profile in AppDataContext:', err?.message || err);
+        });
     } else {
       setUser(null);
     }
+    return () => {
+      isMounted = false;
+    };
   }, [session]);
 
   const mapRequestItem = (req: any, currentAuthUserId?: string, forceIsOwner = false) => {
@@ -243,13 +294,19 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   }, [isAuth]);
 
   const isAuthenticated = isAuth;
-  const currentUser = user || donors[0];
+  const currentUser: Donor = user || {
+    id: '' as any,
+    name: 'Guest',
+    units: 0,
+    bloodType: '',
+    phone: '',
+  };
 
   const login = async (credentials: any, isDemo = false) => {
     if (isDemo) {
-      let foundUser = donors[0]; // Default mock user
+      let foundUser: Donor = { id: 999, name: 'Demo User', units: 0, bloodType: 'O+', phone: '+1 (555) 000-0000' };
       if (credentials.email === 'google_user@demo.com') {
-        foundUser = { id: 999, name: 'Google User', units: 50, bloodType: 'O+', phone: '+1 (555) 000-0000' };
+        foundUser = { id: 999, name: 'Google User', units: 0, bloodType: 'O+', phone: '+1 (555) 000-0000' };
       }
       setUser(foundUser);
       useAuthStore.getState().setSession({
@@ -492,7 +549,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   return (
     <AppDataContext.Provider value={{ 
-      requests, donors, currentUser, user, isAuthenticated, fetchRequests, login, signup, logout, applyToRequest, createRequest, updateRequest, deleteRequest, updateApplicationStatus, cancelApplication, notifications, addNotification, markNotificationsRead
+      requests, donors, currentUser, user, refreshUser, isAuthenticated, fetchRequests, login, signup, logout, applyToRequest, createRequest, updateRequest, deleteRequest, updateApplicationStatus, cancelApplication, notifications, addNotification, markNotificationsRead
     }}>
       {children}
     </AppDataContext.Provider>
