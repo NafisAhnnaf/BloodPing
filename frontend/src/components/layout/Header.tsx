@@ -2,7 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Droplet, Bell, ArrowLeft, User, Lock } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useRole } from '../../context/RoleContext';
-import notificationService, { NotificationItem } from '../../services/notificationService';
+import { useNotifications } from '../../context/NotificationContext';
+import { NotificationInbox } from '../ui/NotificationInbox';
 
 interface HeaderProps {
   title?: string;
@@ -25,27 +26,10 @@ export function Header({
   const currentPath = location.pathname;
   const { role, setRole, systemRole, isDonorApproved } = useRole();
 
-  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [showInbox, setShowInbox] = useState(false);
   const inboxRef = useRef<HTMLDivElement>(null);
-
-  const unreadCount = notifications.filter((n) => !n.is_read).length;
+  const { unreadCount } = useNotifications();
   const hasUnread = unreadCount > 0;
-
-  const fetchNotifications = async () => {
-    try {
-      const res = await notificationService.getMyNotifications();
-      if (res.success && Array.isArray(res.payload)) {
-        setNotifications(res.payload);
-      }
-    } catch (err) {
-      console.warn('Failed to fetch notifications:', err);
-    }
-  };
-
-  useEffect(() => {
-    fetchNotifications();
-  }, []);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -57,17 +41,8 @@ export function Header({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleToggleInbox = async () => {
-    const nextState = !showInbox;
-    setShowInbox(nextState);
-    if (nextState && hasUnread) {
-      try {
-        await notificationService.markNotificationsRead();
-        setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
-      } catch (err) {
-        console.warn('Failed to mark notifications as read:', err);
-      }
-    }
+  const handleToggleInbox = () => {
+    setShowInbox((prev) => !prev);
   };
 
   const navLinks = [
@@ -179,35 +154,8 @@ export function Header({
             </button>
 
             {showInbox && (
-              <div className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] bg-white/95 backdrop-blur-xl border border-white/80 rounded-2xl shadow-2xl overflow-hidden z-[9999] animate-in fade-in slide-in-from-top-2">
-                <div className="p-4 border-b border-slate-100 bg-slate-50/80 flex items-center justify-between">
-                  <h3 className="font-black text-slate-800 text-sm">Notifications</h3>
-                  {unreadCount > 0 && (
-                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-red-100 text-red-600 uppercase">
-                      {unreadCount} New
-                    </span>
-                  )}
-                </div>
-                <div className="max-h-[60vh] overflow-y-auto p-2">
-                  {notifications.length === 0 ? (
-                    <p className="text-xs font-medium text-slate-500 text-center py-6">No notifications yet.</p>
-                  ) : (
-                    notifications.map((notif) => (
-                      <div
-                        key={notif.id}
-                        className={`p-3.5 rounded-xl transition-colors border-b border-slate-100 last:border-0 ${
-                          !notif.is_read ? 'bg-red-50/40' : 'hover:bg-slate-50'
-                        }`}
-                      >
-                        <h4 className="text-xs font-black text-slate-800 mb-0.5">{notif.title}</h4>
-                        <p className="text-xs font-medium text-slate-600 leading-snug">{notif.message}</p>
-                        <span className="text-[10px] font-bold text-slate-400 mt-1.5 block">
-                          {notif.created_at ? new Date(notif.created_at).toLocaleString() : ''}
-                        </span>
-                      </div>
-                    ))
-                  )}
-                </div>
+              <div className="absolute right-0 mt-2 z-[9999]">
+                <NotificationInbox onClose={() => setShowInbox(false)} />
               </div>
             )}
           </div>

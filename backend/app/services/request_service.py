@@ -673,7 +673,11 @@ class RequestService:
                 try:
                     cursor.execute(
                         """
-                        SELECT * FROM public.get_personalized_feed(
+                        SELECT 
+                            feed.*,
+                            dr.recipient_id,
+                            r.user_id AS recipient_user_id
+                        FROM public.get_personalized_feed(
                             %s::UUID,
                             %s::DOUBLE PRECISION,
                             %s::DOUBLE PRECISION,
@@ -681,14 +685,18 @@ class RequestService:
                             %s::public.blood_group,
                             %s::INTEGER,
                             %s::INTEGER
-                        );
+                        ) feed
+                        JOIN public.donation_requests dr ON dr.id = feed.request_id
+                        JOIN public.recipients r ON r.id = dr.recipient_id;
                         """,
                         (user_id, lat, lng, radius_km, blood_group, limit, offset),
                     )
                     rows = cursor.fetchall()
+                    req_ids = [str(r.get("request_id") or r.get("id")) for r in rows if r]
+                    matches = _fetch_matches_by_requests(cursor, req_ids)
                     result = []
                     for r in rows:
-                        row_dict = _format_request_row(r)
+                        row_dict = _format_request_row(r, current_user_id=user_id, matches_by_request=matches)
                         row_dict["distance"] = float(r.get("distance_km", 0.0))
                         row_dict["distance_km"] = float(r.get("distance_km", 0.0))
                         row_dict["match_score"] = float(r.get("match_score", 0.0)) if r.get("match_score") is not None else None

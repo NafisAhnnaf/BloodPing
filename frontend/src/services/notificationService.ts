@@ -32,6 +32,42 @@ export const notificationService = {
     const res = await apiClient.patch('/notifications/mark-read');
     return res.data;
   },
+
+  /**
+   * Marks a specific notification as read.
+   */
+  async markSingleRead(id: string): Promise<ApiResponse<{ id: string }>> {
+    const res = await apiClient.patch(`/notifications/${id}/read`);
+    return res.data;
+  },
+
+  /**
+   * Deletes a specific notification.
+   */
+  async deleteNotification(id: string): Promise<ApiResponse<{ id: string }>> {
+    const res = await apiClient.delete(`/notifications/${id}`);
+    return res.data;
+  },
+
+  /**
+   * Deletes all notifications for the authenticated user.
+   */
+  async clearAllNotifications(): Promise<ApiResponse<null>> {
+    const res = await apiClient.delete('/notifications/clear-all');
+    return res.data;
+  },
+
+  /**
+   * Triggers a live test notification for verification.
+   */
+  async sendTestNotification(title?: string, message?: string): Promise<ApiResponse<NotificationItem>> {
+    const res = await apiClient.post('/notifications/test', {
+      title: title || 'Live Notification Test',
+      message: message || 'Real-time notification stack is active and working smoothly!',
+      type: 'system',
+    });
+    return res.data;
+  },
 };
 
 export default notificationService;

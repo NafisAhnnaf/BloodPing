@@ -17,6 +17,9 @@ import { AdminLogin } from './pages/admin/AdminLogin';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
 import { Suspended } from './pages/Suspended';
 import { BecomeDonorScreen } from './components/ui/BecomeDonorScreen';
+import { NotificationProvider } from './context/NotificationContext';
+import { NotificationToastStack } from './components/ui/NotificationToastStack';
+import { NotificationsPage } from './pages/NotificationsPage';
 
 function AppLayout() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -61,6 +64,7 @@ function AppLayout() {
         <Route path="/profile" element={<ProtectedRoute><DonorProfileStats /></ProtectedRoute>} />
         <Route path="/history" element={<ProtectedRoute><HistoryPage /></ProtectedRoute>} />
         <Route path="/vitals" element={<ProtectedRoute><VitalCore /></ProtectedRoute>} />
+        <Route path="/notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to={isAuthenticated ? "/feed" : "/"} replace />} />
@@ -83,9 +87,12 @@ function AppContent() {
 function App() {
   return (
     <AuthProvider>
-      <AppDataProvider>
-        <AppContent />
-      </AppDataProvider>
+      <NotificationProvider>
+        <AppDataProvider>
+          <AppContent />
+          <NotificationToastStack />
+        </AppDataProvider>
+      </NotificationProvider>
     </AuthProvider>
   );
 }
