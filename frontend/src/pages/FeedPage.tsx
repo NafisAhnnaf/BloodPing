@@ -53,6 +53,10 @@ export function FeedPage() {
   const { processedRequests, isProximityFallback } = useMemo(() => {
     let result = [...requests];
 
+    if (role === 'recipient') {
+      result = result.filter(req => req.isOwner);
+    }
+
     // Filter by Blood Group
     if (activeGroup !== 'All') {
       result = result.filter(req => req.bloodGroup === activeGroup);
@@ -69,12 +73,27 @@ export function FeedPage() {
     if (urgencyFilter === 'open') result = result.filter(req => !req.urgent);
 
     // Filter by Distance
-    const withinDistance = result.filter(req => req.distance <= maxDistance);
-    const isFallback = withinDistance.length === 0 && result.length > 0;
-    const listToDisplay = isFallback ? [...result] : withinDistance;
+    let listToDisplay;
+    let isFallback = false;
+    
+    if (role === 'recipient') {
+      // Recipients see all their requests regardless of distance
+      listToDisplay = result;
+    } else {
+      const withinDistance = result.filter(req => req.distance <= maxDistance);
+      isFallback = withinDistance.length === 0 && result.length > 0;
+      listToDisplay = isFallback ? [...result] : withinDistance;
+    }
 
     // Sorting
     listToDisplay.sort((a, b) => {
+      if (role === 'recipient') {
+        const aOpen = a.status === 'open' ? 0 : 1;
+        const bOpen = b.status === 'open' ? 0 : 1;
+        if (aOpen !== bOpen) return aOpen - bOpen;
+        return new Date(b.date).getTime() - new Date(a.date).getTime();
+      }
+
       // In proximity fallback mode when sortBy is default 'nearest', rank by latest deadline first
       if (isFallback && sortBy === 'nearest') {
         const deadlineA = a.deadline ? new Date(a.deadline).getTime() : 0;
@@ -110,7 +129,7 @@ export function FeedPage() {
     });
 
     return { processedRequests: listToDisplay, isProximityFallback: isFallback };
-  }, [requests, activeGroup, searchQuery, maxDistance, urgencyFilter, sortBy]);
+  }, [requests, activeGroup, searchQuery, maxDistance, urgencyFilter, sortBy, role]);
 
   // Pagination Logic
   const totalPages = Math.ceil(processedRequests.length / itemsPerPage);
