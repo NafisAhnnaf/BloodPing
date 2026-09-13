@@ -25,9 +25,12 @@ def _fetch_matches_by_requests(cursor, request_ids: List[str]) -> Dict[str, List
                 m.confirmed_at,
                 d.user_id AS donor_user_id,
                 p.full_name AS donor_name,
-                d.blood_group AS donor_blood_group,
                 p.phone AS donor_phone,
-                (SELECT md.storage_url FROM public.medical_documents md WHERE md.donor_id = d.id ORDER BY md.uploaded_at DESC LIMIT 1) as medical_doc_url
+                d.blood_group AS donor_blood_group,
+                COALESCE(
+                    (SELECT md.storage_url FROM public.medical_documents md WHERE md.donor_id = d.id ORDER BY md.uploaded_at DESC LIMIT 1),
+                    (SELECT da.document_url FROM public.donor_applications da WHERE da.user_id = d.user_id AND da.document_url IS NOT NULL ORDER BY da.created_at DESC LIMIT 1)
+                ) as medical_doc_url
             FROM public.donation_matches m
             JOIN public.donors d ON m.donor_id = d.id
             JOIN public.profiles p ON d.user_id = p.id
@@ -48,14 +51,14 @@ def _fetch_matches_by_requests(cursor, request_ids: List[str]) -> Dict[str, List
                 "donorUserId": str(r["donor_user_id"]),
                 "donorProfileId": str(r["donor_id"]),
                 "donorName": r["donor_name"],
-                "donorPhone": r["donor_phone"],
+                "donorPhone": r.get("donor_phone"),
                 "bloodGroup": r["donor_blood_group"],
                 "status": str(r["match_status"]),
                 "medicalDocUrl": r.get("medical_doc_url"),
-                "recipient_verification_note": r["recipient_verification_note"],
-                "appliedAt": r["applied_at"].isoformat() if r["applied_at"] else None,
-                "acceptedAt": r["accepted_at"].isoformat() if r["accepted_at"] else None,
-                "confirmedAt": r["confirmed_at"].isoformat() if r["confirmed_at"] else None,
+                "recipient_verification_note": r.get("recipient_verification_note"),
+                "appliedAt": r["applied_at"].isoformat() if r.get("applied_at") else None,
+                "acceptedAt": r["accepted_at"].isoformat() if r.get("accepted_at") else None,
+                "confirmedAt": r["confirmed_at"].isoformat() if r.get("confirmed_at") else None,
             })
         return matches_by_req
     except Exception as e:

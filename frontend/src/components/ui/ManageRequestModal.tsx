@@ -415,6 +415,18 @@ export function ManageRequestModal({ request, onClose }: ManageRequestModalProps
                                 <Phone size={10} /> {donor.phone}
                               </a>
                             )}
+                            {(app.medicalDocUrl || donor.medicalDocUrl) && (
+                              <a 
+                                href={app.medicalDocUrl || donor.medicalDocUrl} 
+                                target="_blank" 
+                                rel="noopener noreferrer" 
+                                onClick={e => e.stopPropagation()} 
+                                className="inline-flex items-center gap-1 text-[10px] font-extrabold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded-md border border-blue-200 transition-colors"
+                                title="View Donor Medical Document"
+                              >
+                                <Download size={10} /> View Medical Doc
+                              </a>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -514,38 +526,30 @@ export function ManageRequestModal({ request, onClose }: ManageRequestModalProps
                           </div>
                         </div>
 
-                        {app.medicalDocUrl && (
-                          <div className="mb-4">
-                            <span className="block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Medical Document</span>
+                        <div className="mb-4">
+                          <span className="block text-[10px] text-slate-400 uppercase tracking-wider mb-1.5">Medical Document</span>
+                          {(app.medicalDocUrl || donor.medicalDocUrl) ? (
                             <a 
-                              href={app.medicalDocUrl} 
+                              href={app.medicalDocUrl || donor.medicalDocUrl} 
                               target="_blank" 
                               rel="noopener noreferrer" 
-                              className="inline-flex items-center gap-1.5 text-sm font-bold text-blue-600 hover:text-blue-700 transition-colors bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg border border-blue-200 shadow-sm" 
+                              className="inline-flex items-center gap-2 text-xs font-extrabold text-blue-600 hover:text-blue-700 transition-colors bg-blue-50 hover:bg-blue-100 px-3.5 py-2 rounded-xl border border-blue-200 shadow-sm active:scale-[0.99]" 
                               onClick={e => e.stopPropagation()}
                             >
-                              <Download size={14} className="text-blue-500" /> View Medical Doc
+                              <Download size={15} className="text-blue-500" /> View Medical Doc
                             </a>
-                          </div>
-                        )}
+                          ) : (
+                            <span className="inline-block text-xs font-semibold text-slate-400 italic bg-slate-100 px-3 py-1.5 rounded-lg">
+                              No medical document uploaded
+                            </span>
+                          )}
+                        </div>
 
                         {app.status === 'canceled' && app.cancelReason && (
                           <div className="mb-4 p-3 bg-rose-50 rounded-xl border border-rose-100">
                             <span className="block text-[10px] text-rose-500 uppercase tracking-wider mb-1 font-bold">Cancellation Reason</span>
                             <p className="text-xs text-rose-700 font-medium">{app.cancelReason}</p>
                           </div>
-                        )}
-
-                        {donor.medicalDocUrl && (
-                          <a 
-                            href={`data:application/pdf;base64,JVBERi0xLjQKJcOkw7zDtsOfCjIgMCBvYmoKPDwvTGVuZ3RoIDMgMCBSL0ZpbHRlci9GbGF0ZURlY29kZT4+CnN0cmVhbQp4nDPQM1Qo5ypUMFAwALJMLYyMDKxMzAwM1AwMFQz1jIxMTfSNTBQA3FwQhwplbmRzdHJlYW0KZW5kb2JqCg==`} 
-                            download="Medical_Clearance.pdf"
-                            className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-xs font-extrabold text-blue-600 bg-blue-50 border border-blue-100 hover:bg-blue-100 transition-colors shadow-sm"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <Download size={16} />
-                            Download Medical Clearance Document
-                          </a>
                         )}
                       </div>
                     )}

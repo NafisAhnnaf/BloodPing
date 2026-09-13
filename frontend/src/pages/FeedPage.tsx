@@ -50,6 +50,7 @@ export function FeedPage() {
 
   // Attempt auto-location on mount
   useEffect(() => {
+    refreshDonorDetails();
     if ('geolocation' in navigator) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {

@@ -55,7 +55,7 @@ BEGIN
             RANK() OVER (PARTITION BY d.blood_group ORDER BY d.total_points DESC, d.total_donations DESC) AS rank_by_blood_group
         FROM public.donors d
         JOIN public.profiles p ON p.id = d.user_id
-        WHERE d.total_donations > 0
+        WHERE (d.total_donations > 0 OR d.total_points > 0)
     )
     SELECT 
         rd.donor_id,
